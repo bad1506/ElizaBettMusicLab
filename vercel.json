@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd ai-engineer-ui && npm run build",
+  "outputDirectory": "ai-engineer-ui/dist",
+  "installCommand": "cd ai-engineer-ui && npm install",
+  "framework": "vite"
+}

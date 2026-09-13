@@ -1,0 +1,30 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+dist/
+build/
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Local/generated audio and project state
+mastering_input/
+optimizer_output/
+separated/
+reference/
+project_data/
+songwriter_data/
+*.wav
+*.mp3
+*.flac
+*.ogg
+
+# Archives
+*.zip

@@ -1,0 +1,13 @@
+streamlit
+librosa
+soundfile
+pyloudnorm
+numpy
+scipy
+pandas
+plotly
+openai
+
+fastapi
+uvicorn
+python-multipart
