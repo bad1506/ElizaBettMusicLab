@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install dependencies
         run: npm install
       - name: TypeScript and Vite build
@@ -45,7 +45,7 @@ jobs:
           tree = ast.parse(Path("api.py").read_text(encoding="utf-8"))
           routes = []
           for node in ast.walk(tree):
-              if isinstance(node, ast.FunctionDef):
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                   for dec in node.decorator_list:
                       if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
                           if dec.func.attr in {"get", "post", "put", "patch", "delete"} and dec.args:
