@@ -36,11 +36,7 @@ jobs:
               'import { useEffect, useMemo, useRef, useState } from "react";',
               'import { useEffect, useRef, useState } from "react";'
           )
-
-          s = re.sub(
-              r'\n  const metricRows = useMemo\(\(\) => \[.*?\n  \], \[a, profileCfg\]\);\n',
-              '\n', s, flags=re.S
-          )
+          s = re.sub(r'\n  const metricRows = useMemo\(\(\) => \[.*?\n  \], \[a, profileCfg\]\);\n', '\n', s, flags=re.S)
           s = re.sub(r'\n  const selected = master\?\.selected_candidate \|\| \{\};', '', s)
           s = re.sub(r'\n  const decisionSummary = decisions\.slice\(0, 5\);', '', s)
           s = re.sub(r'\nfunction MasterSummary\(\{.*?\nfunction IntelligencePage', '\nfunction IntelligencePage', s, flags=re.S)
@@ -49,23 +45,23 @@ jobs:
               'function HomeDashboard({file, analysis, profile, busy, productionBusy, master, onUpload, onProduce, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, onSeek, displayTitle, setDuration, setProgress}: any)',
               'function HomeDashboard({file, analysis, busy, onUpload, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, setDuration, setProgress}: any)'
           )
-          s = s.replace(
-              '<HomeDashboard file={file} analysis={analysis} profile={profileCfg} busy={busy} productionBusy={productionBusy} master={master} onUpload={() => inputRef.current?.click()} onProduce={runProduction} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} onSeek={(t:number) => { if(audioRef.current) audioRef.current.currentTime=t; }} displayTitle={displayTitle} setDuration={setDuration} setProgress={setProgress} />',
-              '<HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />'
+          s = re.sub(
+              r'<HomeDashboard\s+file=\{file\}.*?setProgress=\{setProgress\}\s*/>',
+              '<HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />',
+              s,
+              count=1
           )
-
-          s = s.replace(
-              'const tools = [',
-              'const tools: [string, string, typeof Activity, string][] = ['
-          )
+          s = s.replace('const tools = [', 'const tools: [string, string, typeof Activity, string][] = [')
 
           s = s.replace(
               'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory }: any)',
               'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, setWriterResult, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory, editorStage, setEditorStage, songVersions, setWriterVersion, songAnalysis, setSongAnalysis, analyzeWriterText }: any)'
           )
-          s = s.replace(
-              '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory}/>} ',
-              '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} setWriterResult={setWriterResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory} editorStage={editorStage} setEditorStage={setEditorStage} songVersions={songVersions} setWriterVersion={setWriterVersion} songAnalysis={songAnalysis} setSongAnalysis={setSongAnalysis} analyzeWriterText={analyzeWriterText}/>} '
+          s = re.sub(
+              r'\{active === "Songwriter" && <SongwriterPage[^\n]*\/>\}',
+              '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} setWriterResult={setWriterResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory} editorStage={editorStage} setEditorStage={setEditorStage} songVersions={songVersions} setWriterVersion={setWriterVersion} songAnalysis={songAnalysis} setSongAnalysis={setSongAnalysis} analyzeWriterText={analyzeWriterText}/>}',
+              s,
+              count=1
           )
 
           p.write_text(s, encoding="utf-8")
@@ -79,7 +75,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add ai-engineer-ui/src/App.tsx
-            git commit -m "fix(frontend): restore songwriter and dashboard wiring"
+            git commit -m "fix(frontend): restore songwriter state wiring"
             git push origin HEAD:main
           fi
       - name: Install dependencies
