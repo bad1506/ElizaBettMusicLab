@@ -6,6 +6,8 @@ type Tool = { id: string; title: string; description: string; icon: typeof Spark
 type Track = { title: string; genre: string; year: string; image: string };
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || "https://t.me/ElizaBettMusicLabBot?startapp";
+const SUPPORTED_AUDIO_EXTENSIONS = ["wav", "mp3", "flac", "m4a", "ogg"];
+const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
 const tools: Tool[] = [
   { id: "songwriter", title: "AI Songwriter", description: "Идеи, тексты, мелодии", icon: PenLine },
   { id: "analyzer", title: "Audio Analyzer", description: "Анализ трека, рекомендации", icon: AudioWaveform },
@@ -34,6 +36,23 @@ export default function App() {
     setPage(next);
     setMobileOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function selectAudio(nextFile?: File) {
+    if (!nextFile) return;
+    const extension = nextFile.name.split(".").pop()?.toLowerCase() || "";
+    if (!SUPPORTED_AUDIO_EXTENSIONS.includes(extension)) {
+      setFile(null);
+      setResult(`Формат .${extension || "unknown"} не поддерживается. Используй WAV, MP3, FLAC, M4A или OGG.`);
+      return;
+    }
+    if (nextFile.size > MAX_AUDIO_BYTES) {
+      setFile(null);
+      setResult("Файл слишком большой. Максимальный размер — 100 MB.");
+      return;
+    }
+    setFile(nextFile);
+    setResult("");
   }
 
   async function readError(res: Response) {
@@ -107,7 +126,7 @@ export default function App() {
       <button className="mobile-menu" onClick={() => setMobileOpen(v => !v)} aria-label="Меню">{mobileOpen ? <X /> : <Menu />}</button>
     </header>
     {page === "home" && <Home go={go} />}
-    {page === "tools" && <ToolsPage selectedTool={selectedTool} setSelectedTool={setSelectedTool} request={request} setRequest={setRequest} file={file} setFile={setFile} busy={busy} result={result} runTool={runTool} inputRef={inputRef} />}
+    {page === "tools" && <ToolsPage selectedTool={selectedTool} setSelectedTool={setSelectedTool} request={request} setRequest={setRequest} file={file} setFile={setFile} busy={busy} result={result} runTool={runTool} inputRef={inputRef} selectAudio={selectAudio} />}
     {page === "tracks" && <TracksPage />}
     {page === "projects" && <SimplePage title="Проекты" subtitle="Все твои музыкальные идеи, треки и версии — в одном пространстве." action="Создать проект" />}
     {page === "pricing" && <PricingPage />}
@@ -127,8 +146,13 @@ function Home({ go }: { go: (page: string) => void }) {
   </main>;
 }
 
-function ToolsPage({ selectedTool, setSelectedTool, request, setRequest, file, setFile, busy, result, runTool, inputRef }: { selectedTool: string; setSelectedTool: (v: string) => void; request: string; setRequest: (v: string) => void; file: File | null; setFile: (v: File | null) => void; busy: boolean; result: string; runTool: () => void; inputRef: React.RefObject<HTMLInputElement | null> }) {
-  return <main className="tools-page"><div className="page-intro"><span>AI MUSIC WORKSPACE</span><h1>Инструменты для музыки</h1><p>От идеи до релиза. Выбери инструмент и начни работу.</p></div><div className="tool-layout"><aside className="tool-sidebar">{tools.map(({ id, title, description, icon: Icon }) => <button className={selectedTool === id ? "tool-nav active" : "tool-nav"} key={id} onClick={() => setSelectedTool(id)}><Icon size={19} /><span><b>{title}</b><small>{description}</small></span><ChevronRight size={14} /></button>)}</aside><section className="tool-workspace"><div className="workspace-head"><div><span>ELIZA BETT ENGINE</span><h2>{tools.find(t => t.id === selectedTool)?.title}</h2></div><span className="ready"><i></i> READY</span></div>{selectedTool === "analyzer" || selectedTool === "master" ? <button className="upload-zone" onClick={() => inputRef.current?.click()}><Upload size={28} /><b>{file ? file.name : "Загрузи аудиофайл"}</b><span>WAV, MP3, FLAC · до 100 MB</span></button> : null}<input ref={inputRef} type="file" accept="audio/*" hidden onChange={e => setFile(e.target.files?.[0] || null)} /><textarea className="tool-input" placeholder={selectedTool === "songwriter" ? "Расскажи, какую песню хочешь создать..." : "Опиши задачу или направление..."} value={request} onChange={e => setRequest(e.target.value)} /><button className="dark-button run-button" onClick={runTool} disabled={busy}>{busy ? "Обрабатываем..." : "Запустить AI"} <Zap size={15} /></button>{result && <pre className="result-box">{result}</pre>}</section></div></main>;
+function ToolsPage({ selectedTool, setSelectedTool, request, setRequest, file, setFile, busy, result, runTool, inputRef, selectAudio }: { selectedTool: string; setSelectedTool: (v: string) => void; request: string; setRequest: (v: string) => void; file: File | null; setFile: (v: File | null) => void; busy: boolean; result: string; runTool: () => void; inputRef: React.RefObject<HTMLInputElement | null>; selectAudio: (file?: File) => void }) {
+  const needsAudio = selectedTool === "analyzer" || selectedTool === "master";
+  return <main className="tools-page"><div className="page-intro"><span>AI MUSIC WORKSPACE</span><h1>Инструменты для музыки</h1><p>От идеи до релиза. Выбери инструмент и начни работу.</p></div><div className="tool-layout"><aside className="tool-sidebar">{tools.map(({ id, title, description, icon: Icon }) => <button className={selectedTool === id ? "tool-nav active" : "tool-nav"} key={id} onClick={() => setSelectedTool(id)}><Icon size={19} /><span><b>{title}</b><small>{description}</small></span><ChevronRight size={14} /></button>)}</aside><section className="tool-workspace"><div className="workspace-head"><div><span>ELIZA BETT ENGINE</span><h2>{tools.find(t => t.id === selectedTool)?.title}</h2></div><span className="ready"><i></i> READY</span></div>{needsAudio ? <>
+      <button className="upload-zone" type="button" onClick={() => inputRef.current?.click()}><Upload size={28} /><b>{file ? file.name : "Загрузи аудиофайл"}</b><span>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · готов к обработке` : "WAV, MP3, FLAC, M4A, OGG · до 100 MB"}</span></button>
+      <input ref={inputRef} type="file" hidden onChange={e => { selectAudio(e.target.files?.[0]); e.currentTarget.value = ""; }} />
+      {file && <button type="button" className="file-remove" onClick={() => setFile(null)}>Удалить выбранный файл</button>}
+    </> : null}<textarea className="tool-input" placeholder={selectedTool === "songwriter" ? "Расскажи, какую песню хочешь создать..." : "Опиши задачу или направление..."} value={request} onChange={e => setRequest(e.target.value)} /><button className="dark-button run-button" onClick={runTool} disabled={busy || (needsAudio && !file)}>{busy ? "Обрабатываем..." : "Запустить AI"} <Zap size={15} /></button>{result && <pre className="result-box">{result}</pre>}</section></div></main>;
 }
 function TracksPage() { return <main className="generic-page"><span>LIBRARY</span><h1>Треки</h1><p>Музыка Eliza Bett Music Lab.</p><div className="track-grid large">{tracks.concat(tracks).map((track, i) => <article className="track-card" key={`${track.title}-${i}`}><div className="track-image" style={{ backgroundImage: `url(${track.image})` }}><button><Play size={14} fill="currentColor" /></button></div><div className="track-meta"><div><b>{track.title}</b><span>{track.genre} · {track.year}</span></div></div></article>)}</div></main>; }
 function PricingPage() { return <main className="pricing-page"><div className="page-intro"><span>SIMPLE PRICING</span><h1>Выбери свой ритм</h1><p>Начни бесплатно и переходи на профессиональный уровень, когда будешь готов.</p></div><div className="pricing-grid">{[["FREE", "0 ₽", "Для знакомства"], ["PRO", "990 ₽", "Для активной работы"], ["STUDIO", "2 990 ₽", "Для профессионалов"]].map(([name, price, desc], i) => <article className={i === 1 ? "price-card featured" : "price-card"} key={name}><span>{name}</span><h2>{price}<small>/мес</small></h2><p>{desc}</p><ul><li><Check size={15} /> AI Songwriter</li><li><Check size={15} /> Audio Analyzer</li><li><Check size={15} /> AI Mastering</li><li><Check size={15} /> Projects & Library</li></ul><button className={i === 1 ? "dark-button" : "light-button"}>Начать <ArrowRight size={15} /></button></article>)}</div></main>; }
