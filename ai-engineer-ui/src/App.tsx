@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
-import { ArrowRight, AudioWaveform, Check, ChevronDown, ChevronRight, CirclePlay, Flame, Globe2, Layers3, Menu, Music2, PenLine, Play, SlidersHorizontal, Sparkles, Upload, X, Zap } from "lucide-react";
+import { ArrowRight, AudioWaveform, Check, ChevronDown, ChevronRight, CirclePlay, Flame, Globe2, Menu, Music2, PenLine, Play, SlidersHorizontal, Sparkles, Upload, X, Zap } from "lucide-react";
 import "./App.css";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 type Tool = { id: string; title: string; description: string; icon: typeof Sparkles };
 type Track = { title: string; genre: string; year: string; image: string };
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const tools: Tool[] = [
   { id: "songwriter", title: "AI Songwriter", description: "Идеи, тексты, мелодии", icon: PenLine },
   { id: "analyzer", title: "Audio Analyzer", description: "Анализ трека, рекомендации", icon: AudioWaveform },
