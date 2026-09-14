@@ -24,6 +24,7 @@ import audio_to_song
 import melody_alignment
 import production_engine
 import project_manager
+import telegram_auth
 
 BASE = Path(__file__).resolve().parent
 INPUT_DIR = BASE / "mastering_input"
@@ -44,22 +45,19 @@ def _cors_origins() -> list[str]:
     defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
     return [origin.strip() for origin in configured.split(",") if origin.strip()] or defaults
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 app.mount("/files/input", StaticFiles(directory=str(INPUT_DIR)), name="input_files")
 app.mount("/files/optimizer_output", StaticFiles(directory=str(OUTPUT_DIR)), name="optimizer_files")
 app.mount("/files/separated", StaticFiles(directory=str(SEPARATED_DIR)), name="separated_files")
 
-
 class ChatRequest(BaseModel):
     question: str
-
 
 class MasterRequest(BaseModel):
     target_lufs: float = -10.5
@@ -67,11 +65,9 @@ class MasterRequest(BaseModel):
     intensity: str = "balanced"
     profile: str = "suno6_commercial"
 
-
 def find_latest_audio() -> Path | None:
     candidates = [p for p in INPUT_DIR.iterdir() if p.is_file() and p.suffix.lower() in {".wav", ".mp3", ".flac", ".m4a", ".ogg"}]
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
-
 
 def build_analysis() -> dict[str, Any]:
     path = find_latest_audio()
@@ -79,16 +75,40 @@ def build_analysis() -> dict[str, Any]:
         return {"status": "no_audio", "message": "Аудиофайл пока не загружен."}
     return master_engine.analyze_file(path)
 
-
 @app.get("/")
 def root():
     return {"status": "online", "service": "Eliza Bett Music Lab AI Engineer", "version": APP_VERSION}
-
 
 @app.get("/health")
 def health():
     return {"status": "ok", "version": APP_VERSION}
 
+class TelegramAuthRequest(BaseModel):
+    init_data: str
+
+@app.post("/auth/telegram")
+def auth_telegram(request: TelegramAuthRequest):
+    try:
+        data = telegram_auth.validate_init_data(request.init_data)
+    except telegram_auth.TelegramAuthError as exc:
+        message = str(exc)
+        status = 503 if "не настроен" in message else 401
+        raise HTTPException(status, message)
+    user = data.get("user") or {}
+    return {
+        "ok": True,
+        "authenticated": True,
+        "user": {
+            "id": user.get("id"),
+            "first_name": user.get("first_name", ""),
+            "last_name": user.get("last_name", ""),
+            "username": user.get("username", ""),
+            "language_code": user.get("language_code", ""),
+            "photo_url": user.get("photo_url", ""),
+        },
+        "auth_date": data.get("auth_date"),
+        "start_param": data.get("start_param"),
+    }
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
@@ -100,11 +120,9 @@ async def upload(file: UploadFile = File(...)):
     path.write_bytes(await file.read())
     return {"ok": True, "file": safe, "analysis": master_engine.analyze_file(path)}
 
-
 @app.get("/analysis")
 def analysis():
     return build_analysis()
-
 
 def timeline(source: str = "original"):
     if source == "master":
@@ -119,11 +137,9 @@ def timeline(source: str = "original"):
         return {"status": "no_audio", "source": source}
     return {"status": "ok", "source": source, "file": path.name, **audio_timeline.build_timeline(path)}
 
-
 @app.get("/timeline")
 def get_timeline(source: str = "original"):
     return timeline(source)
-
 
 @app.get("/songwriter/audio-context")
 def songwriter_audio_context():
@@ -131,7 +147,6 @@ def songwriter_audio_context():
     if path is None:
         return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
     return {"status": "ok", "file": path.name, "audio_context": audio_to_song.analyze(path)}
-
 
 @app.get("/songwriter/melody-map")
 def songwriter_melody_map():
@@ -144,7 +159,6 @@ def songwriter_melody_map():
         return {"status": "ok", "file": path.name, "melody_map": melody_alignment.analyze(path, bpm=bpm)}
     except Exception as exc:
         raise HTTPException(500, f"Melody map error: {exc}")
-
 
 @app.get("/intelligence")
 def intelligence(source: str = "original"):
@@ -160,17 +174,14 @@ def intelligence(source: str = "original"):
         return {"status": "no_audio", "source": source}
     return {"status": "ok", "source": source, "file": path.name, **audio_intelligence.analyze_audio(path, segment_sec=5.0)}
 
-
 class SongwriterRequest(BaseModel):
     request: str
     mode: str = "SONG"
     context: dict[str, Any] = Field(default_factory=dict)
     trend_context: str = ""
 
-
 class TrendRequest(BaseModel):
     focus: str = ""
-
 
 class SongMemoryRequest(BaseModel):
     title: str = "Untitled draft"
@@ -179,35 +190,28 @@ class SongMemoryRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-
 class SongNoteRequest(BaseModel):
     note: str
 
-
 class SongwriterAnalyzeRequest(BaseModel):
     text: str
-
 
 @app.post("/songwriter/analyze")
 def songwriter_analyze(request: SongwriterAnalyzeRequest):
     return {"ok": True, "analysis": songwriter_editor.analyze(request.text)}
 
-
 @app.post("/songwriter")
 def songwriter(request: SongwriterRequest):
     return {"ok": True, "agent": "ELIZA BETT SONGWRITER", "version": songwriting_agent.AGENT_VERSION, "mode": request.mode, "answer": songwriting_agent.generate(request.request, request.mode, request.context, request.trend_context)}
-
 
 @app.post("/songwriter/trends")
 def songwriter_trends(request: TrendRequest):
     return songwriting_agent.trend_report(request.focus)
 
-
 class SongDirectorRequest(BaseModel):
     request: str = ""
     context: dict[str, Any] = Field(default_factory=dict)
     trend_context: str = ""
-
 
 @app.post("/songwriter/direct")
 def songwriter_direct(request: SongDirectorRequest):
@@ -222,12 +226,10 @@ def songwriter_direct(request: SongDirectorRequest):
             context["audio_to_song_error"] = str(exc)
     return song_director.direct(request.request, context, request.trend_context)
 
-
 @app.get("/songwriter/memory")
 def songwriter_memory_get(limit: int = 12):
     import songwriter_memory
     return {"ok": True, "memory": songwriter_memory.memory(), "dna": songwriter_memory.dna(), "recent": songwriter_memory.recent(limit)}
-
 
 @app.post("/songwriter/memory")
 def songwriter_memory_save(request: SongMemoryRequest):
@@ -236,18 +238,15 @@ def songwriter_memory_save(request: SongMemoryRequest):
     dna = songwriter_memory.build_local_dna()
     return {"ok": True, "saved": item, "dna": dna}
 
-
 @app.post("/songwriter/note")
 def songwriter_note_save(request: SongNoteRequest):
     import songwriter_memory
     return {"ok": True, "saved": songwriter_memory.add_note(request.note)}
 
-
 @app.post("/songwriter/dna/rebuild")
 def songwriter_dna_rebuild():
     import songwriter_memory
     return {"ok": True, "dna": songwriter_memory.build_local_dna()}
-
 
 @app.get("/vocal")
 def vocal():
@@ -255,7 +254,6 @@ def vocal():
     if path is None:
         return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
     return vocal_intelligence.analyze_vocal(path)
-
 
 @app.post("/reference")
 async def reference(file: UploadFile = File(...)):
@@ -266,7 +264,6 @@ async def reference(file: UploadFile = File(...)):
     path = REFERENCE_DIR / safe
     path.write_bytes(await file.read())
     return {"ok": True, "file": safe, "analysis": master_engine.analyze_file(path)}
-
 
 @app.post("/master")
 def master(request: MasterRequest):
@@ -279,7 +276,6 @@ def master(request: MasterRequest):
         reference = max(refs, key=lambda p: p.stat().st_mtime)
     return master_engine.run(path, OUTPUT_DIR, request.target_lufs, request.ceiling_db, request.intensity, reference=reference, profile=request.profile)
 
-
 @app.get("/master/latest")
 def latest_master():
     masters = [p for p in OUTPUT_DIR.iterdir() if p.is_file() and p.name.endswith("_MASTER.wav")]
@@ -287,7 +283,6 @@ def latest_master():
         raise HTTPException(404, "Мастер ещё не создан")
     path = max(masters, key=lambda p: p.stat().st_mtime)
     return {"file": path.name, "url": f"/files/optimizer_output/{path.name}"}
-
 
 @app.get("/reference/latest")
 def latest_reference():
@@ -297,12 +292,10 @@ def latest_reference():
     path = max(refs, key=lambda p: p.stat().st_mtime)
     return {"file": path.name, "analysis": master_engine.analyze_file(path)}
 
-
 class ProductionRequest(BaseModel):
     request: str = ""
     profile: str = "suno6_commercial"
     target_lufs: float = -10.5
-
 
 @app.post("/production/run")
 def production_run(request: ProductionRequest):
@@ -310,7 +303,6 @@ def production_run(request: ProductionRequest):
     if not result.get("ok"):
         raise HTTPException(400, result.get("message", "Production engine error"))
     return result
-
 
 @app.get("/production/latest")
 def production_latest():
@@ -320,7 +312,6 @@ def production_latest():
     path = max(reports, key=lambda p: p.stat().st_mtime)
     return {"status": "ok", "file": path.name, "url": f"/files/optimizer_output/{path.name}"}
 
-
 class ProjectRequest(BaseModel):
     name: str = ""
     brief: str = ""
@@ -329,21 +320,17 @@ class ProjectRequest(BaseModel):
     suno_prompt: str = ""
     notes: str = ""
 
-
 @app.get("/project")
 def project_latest():
     return project_manager.load(PROJECT_DIR)
-
 
 @app.post("/project/save")
 def project_save(request: ProjectRequest):
     return project_manager.save(INPUT_DIR, OUTPUT_DIR, PROJECT_DIR, request.model_dump())
 
-
 @app.post("/project/export")
 def project_export(request: ProjectRequest):
     return project_manager.export_bundle(INPUT_DIR, OUTPUT_DIR, PROJECT_DIR, request.model_dump())
-
 
 @app.post("/stems")
 def stems():
@@ -362,7 +349,6 @@ def stems():
     stem_root = SEPARATED_DIR / "htdemucs" / path.stem
     stems = {name: f"/files/separated/{stem_root.relative_to(SEPARATED_DIR).as_posix()}" for name in ("vocals.wav", "drums.wav", "bass.wav", "other.wav") if (stem_root/name).exists()}
     return {"ok": True, "stems": stems}
-
 
 @app.post("/chat")
 def chat(request: ChatRequest):
