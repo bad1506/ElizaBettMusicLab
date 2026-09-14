@@ -1,5 +1,6 @@
 name: CI
 
+# Frontend repair is intentionally idempotent and validated on every main push.
 on:
   push:
     branches: [main]
@@ -31,39 +32,16 @@ jobs:
 
           p = Path("ai-engineer-ui/src/App.tsx")
           s = p.read_text(encoding="utf-8")
-
-          s = s.replace(
-              'import { useEffect, useMemo, useRef, useState } from "react";',
-              'import { useEffect, useRef, useState } from "react";'
-          )
+          s = s.replace('import { useEffect, useMemo, useRef, useState } from "react";', 'import { useEffect, useRef, useState } from "react";')
           s = re.sub(r'\n  const metricRows = useMemo\(\(\) => \[.*?\n  \], \[a, profileCfg\]\);\n', '\n', s, flags=re.S)
           s = re.sub(r'\n  const selected = master\?\.selected_candidate \|\| \{\};', '', s)
           s = re.sub(r'\n  const decisionSummary = decisions\.slice\(0, 5\);', '', s)
           s = re.sub(r'\nfunction MasterSummary\(\{.*?\nfunction IntelligencePage', '\nfunction IntelligencePage', s, flags=re.S)
-
-          s = s.replace(
-              'function HomeDashboard({file, analysis, profile, busy, productionBusy, master, onUpload, onProduce, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, onSeek, displayTitle, setDuration, setProgress}: any)',
-              'function HomeDashboard({file, analysis, busy, onUpload, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, setDuration, setProgress}: any)'
-          )
-          s = re.sub(
-              r'<HomeDashboard\s+file=\{file\}.*?setProgress=\{setProgress\}\s*/>',
-              '<HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />',
-              s,
-              count=1
-          )
+          s = s.replace('function HomeDashboard({file, analysis, profile, busy, productionBusy, master, onUpload, onProduce, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, onSeek, displayTitle, setDuration, setProgress}: any)', 'function HomeDashboard({file, analysis, busy, onUpload, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, setDuration, setProgress}: any)')
+          s = re.sub(r'<HomeDashboard\s+file=\{file\}.*?setProgress=\{setProgress\}\s*/>', '<HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />', s, count=1)
           s = s.replace('const tools = [', 'const tools: [string, string, typeof Activity, string][] = [')
-
-          s = s.replace(
-              'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory }: any)',
-              'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, setWriterResult, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory, editorStage, setEditorStage, songVersions, setWriterVersion, songAnalysis, setSongAnalysis, analyzeWriterText }: any)'
-          )
-          s = re.sub(
-              r'\{active === "Songwriter" && <SongwriterPage[^\n]*\/>\}',
-              '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} setWriterResult={setWriterResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory} editorStage={editorStage} setEditorStage={setEditorStage} songVersions={songVersions} setWriterVersion={setWriterVersion} songAnalysis={songAnalysis} setSongAnalysis={setSongAnalysis} analyzeWriterText={analyzeWriterText}/>}',
-              s,
-              count=1
-          )
-
+          s = s.replace('function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory }: any)', 'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, setWriterResult, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory, editorStage, setEditorStage, songVersions, setWriterVersion, songAnalysis, setSongAnalysis, analyzeWriterText }: any)')
+          s = re.sub(r'\{active === "Songwriter" && <SongwriterPage[^\n]*\/>\}', '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} setWriterResult={setWriterResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory} editorStage={editorStage} setEditorStage={setEditorStage} songVersions={songVersions} setWriterVersion={setWriterVersion} songAnalysis={songAnalysis} setSongAnalysis={setSongAnalysis} analyzeWriterText={analyzeWriterText}/>} ', s, count=1)
           p.write_text(s, encoding="utf-8")
           PY
       - name: Commit frontend repair
@@ -100,30 +78,17 @@ jobs:
           python - <<'PY'
           import ast
           from pathlib import Path
-
           tree = ast.parse(Path("api.py").read_text(encoding="utf-8"))
           routes = []
           for node in ast.walk(tree):
               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                   for dec in node.decorator_list:
-                      if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
-                          if dec.func.attr in {"get", "post", "put", "patch", "delete"} and dec.args:
-                              if isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
-                                  routes.append((dec.func.attr.upper(), dec.args[0].value, node.name))
-          required = {
-              ("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"),
-              ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"),
-              ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/chat"),
-              ("POST", "/songwriter"), ("POST", "/songwriter/analyze"),
-              ("POST", "/songwriter/direct"), ("GET", "/songwriter/memory"),
-              ("POST", "/songwriter/memory"), ("POST", "/songwriter/dna/rebuild"),
-              ("GET", "/songwriter/audio-context"), ("GET", "/songwriter/melody-map"),
-              ("POST", "/production/run"), ("GET", "/production/latest"),
-              ("GET", "/project"), ("POST", "/project/save"), ("POST", "/project/export"),
-          }
+                      if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr in {"get", "post", "put", "patch", "delete"} and dec.args:
+                          if isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
+                              routes.append((dec.func.attr.upper(), dec.args[0].value, node.name))
+          required = {("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"), ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"), ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/chat"), ("POST", "/songwriter"), ("POST", "/songwriter/analyze"), ("POST", "/songwriter/direct"), ("GET", "/songwriter/memory"), ("POST", "/songwriter/memory"), ("POST", "/songwriter/dna/rebuild"), ("GET", "/songwriter/audio-context"), ("GET", "/songwriter/melody-map"), ("POST", "/production/run"), ("GET", "/production/latest"), ("GET", "/project"), ("POST", "/project/save"), ("POST", "/project/export")}
           actual = {(method, path) for method, path, _ in routes}
           missing = sorted(required - actual)
-          if missing:
-              raise SystemExit(f"Missing API routes: {missing}")
+          if missing: raise SystemExit(f"Missing API routes: {missing}")
           print(f"Validated {len(routes)} FastAPI route declarations")
           PY
