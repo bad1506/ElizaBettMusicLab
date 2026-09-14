@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-engineer-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: TypeScript and Vite build
+        run: npm run build
+
+  backend:
+    name: Backend syntax and API contract checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile all Python modules
+        run: python -m compileall -q .
+      - name: Validate FastAPI route declarations
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          tree = ast.parse(Path("api.py").read_text(encoding="utf-8"))
+          routes = []
+          for node in ast.walk(tree):
+              if isinstance(node, ast.FunctionDef):
+                  for dec in node.decorator_list:
+                      if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
+                          if dec.func.attr in {"get", "post", "put", "patch", "delete"} and dec.args:
+                              if isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
+                                  routes.append((dec.func.attr.upper(), dec.args[0].value, node.name))
+          required = {
+              ("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"),
+              ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"),
+              ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/chat"),
+              ("POST", "/songwriter"), ("POST", "/songwriter/analyze"),
+              ("POST", "/songwriter/direct"), ("GET", "/songwriter/memory"),
+              ("POST", "/songwriter/memory"), ("POST", "/songwriter/dna/rebuild"),
+              ("GET", "/songwriter/audio-context"), ("GET", "/songwriter/melody-map"),
+              ("POST", "/production/run"), ("GET", "/production/latest"),
+              ("GET", "/project"), ("POST", "/project/save"), ("POST", "/project/export"),
+          }
+          actual = {(method, path) for method, path, _ in routes}
+          missing = sorted(required - actual)
+          if missing:
+              raise SystemExit(f"Missing API routes: {missing}")
+          print(f"Validated {len(routes)} FastAPI route declarations")
+          PY
