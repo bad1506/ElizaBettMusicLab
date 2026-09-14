@@ -11,3 +11,5 @@ openai
 fastapi
 uvicorn
 python-multipart
+
+demucs
