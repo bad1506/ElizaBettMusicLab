@@ -5,7 +5,7 @@ import "./App.css";
 type Tool = { id: string; title: string; description: string; icon: typeof Sparkles };
 type Track = { title: string; genre: string; year: string; image: string };
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-const TELEGRAM_URL = "https://t.me/ElizaBettMusicLabBot?startapp";
+const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || "https://t.me/ElizaBettMusicLabBot?startapp";
 const tools: Tool[] = [
   { id: "songwriter", title: "AI Songwriter", description: "Идеи, тексты, мелодии", icon: PenLine },
   { id: "analyzer", title: "Audio Analyzer", description: "Анализ трека, рекомендации", icon: AudioWaveform },
@@ -29,27 +29,76 @@ export default function App() {
   const [result, setResult] = useState("");
   const [request, setRequest] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  function go(next: string) { setPage(next); setMobileOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }
+
+  function go(next: string) {
+    setPage(next);
+    setMobileOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function readError(res: Response) {
+    const text = await res.text();
+    try {
+      const parsed = JSON.parse(text);
+      return parsed.detail || parsed.message || text;
+    } catch {
+      return text || `HTTP ${res.status}`;
+    }
+  }
+
+  async function uploadAudio() {
+    if (!file) throw new Error("Сначала выберите аудиофайл.");
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`${API}/upload`, { method: "POST", body });
+    if (!res.ok) throw new Error(await readError(res));
+    return res.json();
+  }
+
   async function runTool() {
     if (!request.trim() && !file) return;
-    setBusy(true); setResult("");
+    setBusy(true);
+    setResult("");
     try {
       if (selectedTool === "songwriter") {
-        const res = await fetch(`${API}/songwriter`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request, mode: "SONG" }) });
-        if (!res.ok) throw new Error(await res.text()); const data = await res.json(); setResult(data.answer || "Готово");
-      } else if (selectedTool === "analyzer" && file) {
-        const body = new FormData(); body.append("file", file); const res = await fetch(`${API}/upload`, { method: "POST", body });
-        if (!res.ok) throw new Error(await res.text()); const data = await res.json(); setResult(JSON.stringify(data.analysis || data, null, 2));
+        const res = await fetch(`${API}/songwriter`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request, mode: "SONG" }),
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json();
+        setResult(data.answer || "Готово");
+      } else if (selectedTool === "analyzer") {
+        const data = await uploadAudio();
+        setResult(JSON.stringify(data.analysis || data, null, 2));
       } else if (selectedTool === "master") {
-        const res = await fetch(`${API}/master`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_lufs: -10.5, ceiling_db: -1, intensity: "balanced", profile: "suno6_commercial" }) });
-        if (!res.ok) throw new Error(await res.text()); const data = await res.json(); setResult(`Мастеринг завершён. Target: ${data.final_analysis?.lufs ?? "—"} LUFS`);
+        await uploadAudio();
+        const res = await fetch(`${API}/master`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_lufs: -10.5, ceiling_db: -1, intensity: "balanced", profile: "suno6_commercial" }),
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json();
+        setResult(`Мастеринг завершён. Target: ${data.final_analysis?.lufs ?? "—"} LUFS`);
       } else if (selectedTool === "trends") {
-        const res = await fetch(`${API}/songwriter/trends`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ focus: request || "Russian pop, TikTok, atmospheric pop" }) });
-        if (!res.ok) throw new Error(await res.text()); const data = await res.json(); setResult(data.answer || JSON.stringify(data, null, 2));
+        const res = await fetch(`${API}/songwriter/trends`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ focus: request || "Russian pop, TikTok, atmospheric pop" }),
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json();
+        setResult(data.report || data.answer || JSON.stringify(data, null, 2));
       }
-    } catch (error) { setResult(`Не удалось выполнить запрос: ${String(error).replace(/^Error:\s*/, "")}`); }
-    finally { setBusy(false); }
+    } catch (error) {
+      setResult(`Не удалось выполнить запрос: ${String(error).replace(/^Error:\s*/, "")}`);
+    } finally {
+      setBusy(false);
+    }
   }
+
   return <div className="site-shell">
     <header className="site-header">
       <button className="brand" onClick={() => go("home")} aria-label="Eliza Bett Music Lab"><span className="brand-name">Eliza Bett</span><span className="brand-sub">MUSIC LAB</span></button>
@@ -74,7 +123,7 @@ function Home({ go }: { go: (page: string) => void }) {
     <section className="tool-strip">{tools.map(({ id, title, description, icon: Icon }) => <button className="feature-card" key={id} onClick={() => go("tools")}><Icon size={25} /><div><b>{title}</b><span>{description}</span></div><i><ArrowRight size={14} /></i></button>)}</section>
     <section className="telegram-banner"><div className="banner-copy"><span className="banner-kicker">✦</span><h3>Твоя музыка.<br />Без границ.</h3><p>Профессиональные AI-инструменты теперь доступны в Telegram.</p><button className="dark-button" onClick={() => window.open(TELEGRAM_URL, "_blank")}>Открыть в Telegram <ArrowRight size={15} /></button></div><div className="banner-image"></div><div className="mini-app"><span>TELEGRAM</span><h3>Music Lab<br />Mini App</h3><p>Создавай музыку прямо в Telegram. Всегда с тобой.</p><button onClick={() => window.open(TELEGRAM_URL, "_blank")}>Запустить Mini App <ArrowRight size={14} /></button></div></section>
     <section className="content-section"><div className="section-heading"><div><span>DISCOVER</span><h2>Последние треки</h2></div><button>Смотреть все <ArrowRight size={14} /></button></div><div className="bottom-grid"><div className="track-grid">{tracks.map(track => <article className="track-card" key={track.title}><div className="track-image" style={{ backgroundImage: `url(${track.image})` }}><button><Play size={14} fill="currentColor" /></button></div><div className="track-meta"><div><b>{track.title}</b><span>{track.genre} · {track.year}</span></div><button>•••</button></div></article>)}</div><div className="trends-panel"><div className="section-heading"><div><span>NOW</span><h2>Тренды сейчас</h2></div><button>Все <ArrowRight size={14} /></button></div>{trends.map(([number, title, sub]) => <div className="trend-row" key={number}><b>{number}</b><span className="trend-avatar"></span><div><strong>{title}</strong><small>{sub}</small></div><AudioWaveform size={20} /></div>)}</div></div></section>
-    <footer className="footer"><div className="brand-footer">Eliza Bett<small>MUSIC LAB</small></div><div className="footer-links"><span>Конфиденциальность</span><span>Условия</span><span>Поддержка</span></div><div className="footer-social">◉　♪　◎　 <em>Music changes everything ♡</em></div></footer>
+    <footer className="footer"><div className="brand-footer">Eliza Bett<small>MUSIC LAB</small></div><div className="footer-links"><span>Конфиденциальность</span><span>Условия</span><span>Поддержка</span></div><div className="footer-social">◉　♪　◎　 <em>Music changes everything ♡</em></div>
   </main>;
 }
 
