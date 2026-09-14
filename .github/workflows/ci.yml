@@ -1,17 +1,16 @@
 name: CI
 
-# Frontend repair is intentionally idempotent and validated on every main push.
 on:
   push:
     branches: [main]
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   frontend:
-    name: Frontend build
+    name: Frontend build and smoke test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,43 +22,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Repair frontend wiring
-        working-directory: .
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          p = Path("ai-engineer-ui/src/App.tsx")
-          s = p.read_text(encoding="utf-8")
-          s = s.replace('import { useEffect, useMemo, useRef, useState } from "react";', 'import { useEffect, useRef, useState } from "react";')
-          s = re.sub(r'\n  const metricRows = useMemo\(\(\) => \[.*?\n  \], \[a, profileCfg\]\);\n', '\n', s, flags=re.S)
-          s = re.sub(r'\n  const selected = master\?\.selected_candidate \|\| \{\};', '', s)
-          s = re.sub(r'\n  const decisionSummary = decisions\.slice\(0, 5\);', '', s)
-          s = re.sub(r'\nfunction MasterSummary\(\{.*?\nfunction IntelligencePage', '\nfunction IntelligencePage', s, flags=re.S)
-          s = s.replace('function HomeDashboard({file, analysis, profile, busy, productionBusy, master, onUpload, onProduce, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, onSeek, displayTitle, setDuration, setProgress}: any)', 'function HomeDashboard({file, analysis, busy, onUpload, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, setDuration, setProgress}: any)')
-          s = re.sub(r'<HomeDashboard\s+file=\{file\}.*?setProgress=\{setProgress\}\s*/>', '<HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />', s, count=1)
-          s = s.replace('const tools = [', 'const tools: [string, string, typeof Activity, string][] = [')
-          s = s.replace('function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory }: any)', 'function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, setWriterResult, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory, editorStage, setEditorStage, songVersions, setWriterVersion, songAnalysis, setSongAnalysis, analyzeWriterText }: any)')
-          s = re.sub(r'\{active === "Songwriter" && <SongwriterPage[^\n]*\/>\}', '{active === "Songwriter" && <SongwriterPage audioSongContext={audioSongContext} melodyMap={melodyMap} mode={writerMode} setMode={setWriterMode} request={writerRequest} setRequest={setWriterRequest} result={writerResult} setWriterResult={setWriterResult} trend={trendResult} director={directorResult} directorBusy={directorBusy} busy={writerBusy} run={runSongwriter} direct={runDirector} trends={runTrends} save={saveWriterDraft} rebuild={rebuildArtistDna} dna={artistDna} memory={writerMemory} editorStage={editorStage} setEditorStage={setEditorStage} songVersions={songVersions} setWriterVersion={setWriterVersion} songAnalysis={songAnalysis} setSongAnalysis={setSongAnalysis} analyzeWriterText={analyzeWriterText}/>} ', s, count=1)
-          p.write_text(s, encoding="utf-8")
-          PY
-      - name: Commit frontend repair
-        working-directory: .
-        run: |
-          if git diff --quiet -- ai-engineer-ui/src/App.tsx; then
-            echo "Frontend already repaired."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ai-engineer-ui/src/App.tsx
-            git commit -m "fix(frontend): restore songwriter state wiring"
-            git push origin HEAD:main
-          fi
       - name: Install dependencies
         run: npm install
       - name: TypeScript and Vite build
         run: npm run build
+      - name: Preview server smoke test
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/eliza-vite.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/ > /tmp/eliza-home.html; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/eliza-home.html
+          grep -q '<div id="root"></div>' /tmp/eliza-home.html
+          test -f dist/index.html
+          echo "Frontend preview smoke test passed"
 
   backend:
     name: Backend syntax and API contract checks
@@ -89,6 +70,7 @@ jobs:
           required = {("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"), ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"), ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/chat"), ("POST", "/songwriter"), ("POST", "/songwriter/analyze"), ("POST", "/songwriter/direct"), ("GET", "/songwriter/memory"), ("POST", "/songwriter/memory"), ("POST", "/songwriter/dna/rebuild"), ("GET", "/songwriter/audio-context"), ("GET", "/songwriter/melody-map"), ("POST", "/production/run"), ("GET", "/production/latest"), ("GET", "/project"), ("POST", "/project/save"), ("POST", "/project/export")}
           actual = {(method, path) for method, path, _ in routes}
           missing = sorted(required - actual)
-          if missing: raise SystemExit(f"Missing API routes: {missing}")
+          if missing:
+              raise SystemExit(f"Missing API routes: {missing}")
           print(f"Validated {len(routes)} FastAPI route declarations")
           PY
