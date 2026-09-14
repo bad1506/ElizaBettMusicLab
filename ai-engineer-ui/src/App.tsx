@@ -1,68 +1,162 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowRight, AudioWaveform, ChevronRight, Flame, Globe2, Menu, PenLine, Play, Send, SlidersHorizontal, Sparkles, Upload, X, Zap } from "lucide-react";
+import { ArrowRight, AudioWaveform, ChevronRight, Download, Flame, Globe2, Menu, PenLine, Play, Send, SlidersHorizontal, Sparkles, Upload, X, Zap } from "lucide-react";
 import "./Chat.css";
 
 type ToolId = "songwriter" | "analyzer" | "master" | "trends";
+type Lang = "ru" | "en";
 type Message = { role: "assistant" | "user"; text: string };
 type Tool = { id: ToolId; title: string; description: string; icon: typeof Sparkles };
 const API = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://127.0.0.1:8000" : "https://elizabettmusiclab-1.onrender.com");
 const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || "https://t.me/ElizaBettMusicLabBot?startapp";
 const EXTENSIONS = ["wav", "mp3", "flac", "m4a", "ogg"];
 const MAX_BYTES = 100 * 1024 * 1024;
-const tools: Tool[] = [
-  { id: "songwriter", title: "AI Songwriter", description: "Идеи, тексты, мелодии", icon: PenLine },
-  { id: "analyzer", title: "Audio Analyzer", description: "Анализ трека, рекомендации", icon: AudioWaveform },
-  { id: "master", title: "AI Mastering", description: "Профессиональный мастеринг с AI", icon: SlidersHorizontal },
-  { id: "trends", title: "Trends", description: "Актуальные тренды, референсы, идеи", icon: Flame },
-];
-const initialMessages: Record<ToolId, Message[]> = {
-  songwriter: [{ role: "assistant", text: "Я AI Songwriter. Опиши, что хочешь получить — тему, настроение, артиста, референс, язык, структуру. Я буду уточнять детали, пока результат не станет точным." }],
-  analyzer: [{ role: "assistant", text: "Я Audio Analyzer. Загрузи трек и напиши, что тебя интересует: вокал, низ, стерео, громкость, клиппинг, баланс или подготовка к мастерингу. Разберём конкретно." }],
-  master: [{ role: "assistant", text: "Я AI Mastering. Загрузи трек и скажи, каким должен быть результат: громкость, плотность, динамика, характер, референс. Перед запуском я зафиксирую параметры." }],
-  trends: [{ role: "assistant", text: "Я Trends. Назови жанр, платформу, аудиторию или артиста — найду актуальное направление и превращу его в конкретные идеи для трека." }],
-};
+
+const copy = {
+  ru: {
+    nav: ["Главная", "AI Инструменты", "Треки", "Проекты", "Тарифы", "О нас"],
+    start: "Начать сейчас", video: "Смотреть видео", telegram: "Открыть в Telegram",
+    heroTitle: "Создавай. Анализируй. Улучшай. Выпускай.", heroText: "Все инструменты для твоей музыки — в одном месте.",
+    stats: ["создано треков", "довольных авторов", "без границ", "AI для музыкантов"],
+    tools: ["AI Songwriter", "Audio Analyzer", "AI Mastering", "Trends"],
+    descriptions: ["Идеи, тексты, мелодии", "Анализ трека, рекомендации", "Адаптивный мастеринг с AI", "Актуальные тренды, референсы, идеи"],
+    workspace: "Работаем как в чате", workspaceText: "Каждая вкладка — отдельный продукт и отдельный контекст.", online: "ENGINE ONLINE", context: "Контекст сохраняется",
+    upload: "Загрузить аудио", auto: "Авто-мастеринг", analyze: "Полный анализ", send: "Отправить",
+    masterHint: "Авто сам выберет безопасную громкость и сравнит варианты по QC.",
+    masterDone: "Мастеринг завершён", masterLatest: "Master Engine 6.5 · Adaptive Auto", download: "Открыть мастер",
+    masterPrompt: "Авто-мастеринг", analyzePrompt: "Проведи полный анализ трека", songwriterPlaceholder: "Напиши, какой трек создаём...", analyzerPlaceholder: "Что проверить в треке?", masterPlaceholder: "Каким должен быть мастер?", trendsPlaceholder: "Какой тренд ищем?",
+    fileAccepted: "Файл принят. Теперь выбери действие.", fileTooBig: "Файл слишком большой. Максимальный размер — 100 MB.", badFormat: "Используй WAV, MP3, FLAC, M4A или OGG.", noFile: "Сначала загрузи аудиофайл.",
+    telegramTitle: "Telegram Mini App", telegramText: "Создавай музыку прямо в Telegram.\nВсегда с тобой.", projectsTitle: "Твои треки.\nТвоя история.", projectsText: "Сохраняй проекты, делись, развивайся. Всё в одном месте.",
+    latest: "Последние треки", trends: "Тренды сейчас", all: "Смотреть все", footer: "СЛУШАЙ. СОЗДАВАЙ.\nВДОХНОВЛЯЙ.",
+    pages: { tracks: ["Треки", "Музыка, версии и готовые релизы — в одном месте."], projects: ["Проекты", "Сохраняй идеи, версии, референсы и финальные мастера."], pricing: ["Тарифы", "Выбери уровень AI-инструментов под свой объём работы."], about: ["Eliza Bett Music Lab", "AI-пространство для музыканта — от идеи до готового релиза."] },
+  },
+  en: {
+    nav: ["Home", "AI Tools", "Tracks", "Projects", "Pricing", "About"],
+    start: "Start now", video: "Watch video", telegram: "Open in Telegram",
+    heroTitle: "Create. Analyze. Improve. Release.", heroText: "Everything you need for your music — in one place.",
+    stats: ["tracks created", "happy creators", "no limits", "AI for musicians"],
+    tools: ["AI Songwriter", "Audio Analyzer", "AI Mastering", "Trends"],
+    descriptions: ["Ideas, lyrics, melodies", "Track analysis and feedback", "Adaptive AI mastering", "Trends, references and ideas"],
+    workspace: "Work like a chat", workspaceText: "Each tab is a separate product with its own context.", online: "ENGINE ONLINE", context: "Context saved",
+    upload: "Upload audio", auto: "Auto mastering", analyze: "Full analysis", send: "Send",
+    masterHint: "Auto mode chooses a safe loudness target and compares variants with QC.",
+    masterDone: "Mastering complete", masterLatest: "Master Engine 6.5 · Adaptive Auto", download: "Open master",
+    masterPrompt: "Auto mastering", analyzePrompt: "Run a full track analysis", songwriterPlaceholder: "Tell me what track we are creating...", analyzerPlaceholder: "What should I check in the track?", masterPlaceholder: "What should the master sound like?", trendsPlaceholder: "What trend should we research?",
+    fileAccepted: "File accepted. Choose an action.", fileTooBig: "File is too large. Maximum size is 100 MB.", badFormat: "Use WAV, MP3, FLAC, M4A or OGG.", noFile: "Upload an audio file first.",
+    telegramTitle: "Telegram Mini App", telegramText: "Create music directly in Telegram.\nAlways with you.", projectsTitle: "Your tracks.\nYour story.", projectsText: "Save projects, share, improve. Everything in one place.",
+    latest: "Latest tracks", trends: "Trending now", all: "View all", footer: "LISTEN. CREATE.\nINSPIRE.",
+    pages: { tracks: ["Tracks", "Music, versions and finished releases — in one place."], projects: ["Projects", "Save ideas, versions, references and final masters."], pricing: ["Pricing", "Choose the AI tool level for your workflow."], about: ["Eliza Bett Music Lab", "An AI workspace for musicians — from idea to finished release."] },
+  }
+} as const;
 
 function TelegramIcon({ size = 18 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21.4 4.6 18.2 19.7c-.24 1.08-.88 1.35-1.78.84l-4.92-3.63-2.37 2.28c-.26.26-.48.48-.98.48l.35-5.02 9.14-8.26c.4-.35-.09-.55-.62-.2L5.71 13.1.86 11.58c-1.06-.33-1.08-1.06.22-1.55L20.04 2.8c.88-.33 1.65.2 1.36 1.8Z" fill="currentColor"/></svg>; }
 
 export default function App() {
   const [page, setPage] = useState("home");
   const [tool, setTool] = useState<ToolId>("songwriter");
-  const [messages, setMessages] = useState<Record<ToolId, Message[]>>(initialMessages);
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem("eliza_lang") as Lang) || "ru");
+  const [messages, setMessages] = useState<Record<ToolId, Message[]>>(() => initialMessages(lang));
   const [input, setInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const currentTool = useMemo(() => tools.find((x) => x.id === tool)!, [tool]);
+  const c = copy[lang];
+  const tools: Tool[] = useMemo(() => [
+    { id: "songwriter", title: c.tools[0], description: c.descriptions[0], icon: PenLine },
+    { id: "analyzer", title: c.tools[1], description: c.descriptions[1], icon: AudioWaveform },
+    { id: "master", title: c.tools[2], description: c.descriptions[2], icon: SlidersHorizontal },
+    { id: "trends", title: c.tools[3], description: c.descriptions[3], icon: Flame },
+  ], [c]);
+  const currentTool = useMemo(() => tools.find((x) => x.id === tool)!, [tools, tool]);
   const go = (next: string) => { setPage(next); setMobileOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openTelegram = () => window.open(TELEGRAM_URL, "_blank", "noopener,noreferrer");
   const openTool = (id: ToolId) => { setTool(id); go("tools"); };
   const add = (message: Message) => setMessages((all) => ({ ...all, [tool]: [...all[tool], message] }));
+  const changeLang = (next: Lang) => { setLang(next); localStorage.setItem("eliza_lang", next); setMessages(initialMessages(next)); };
   async function readError(res: Response) { const text = await res.text(); try { const data = JSON.parse(text); return data.detail || data.message || text; } catch { return text || `HTTP ${res.status}`; } }
   function selectTool(id: ToolId) { setTool(id); setInput(""); setFile(null); }
-  function selectAudio(next?: File) { if (!next) return; const ext = next.name.split(".").pop()?.toLowerCase() || ""; if (!EXTENSIONS.includes(ext)) { add({ role: "assistant", text: `Формат .${ext || "unknown"} не поддерживается. Используй WAV, MP3, FLAC, M4A или OGG.` }); return; } if (next.size > MAX_BYTES) { add({ role: "assistant", text: "Файл слишком большой. Максимальный размер — 100 MB." }); return; } setFile(next); add({ role: "assistant", text: `Файл «${next.name}» принят. Теперь скажи, какой результат нужен.` }); }
-  async function uploadAudio() { if (!file) throw new Error("Сначала загрузи аудиофайл."); const body = new FormData(); body.append("file", file); const res = await fetch(`${API}/upload`, { method: "POST", body }); if (!res.ok) throw new Error(await readError(res)); return res.json(); }
-  function context() { return messages[tool].slice(-8).map((m) => `${m.role === "user" ? "Клиент" : "AI"}: ${m.text}`).join("\n"); }
-  async function send() {
-    const text = input.trim(); if (!text || busy) return; add({ role: "user", text }); setInput(""); setBusy(true);
-    try {
-      if (tool === "songwriter") { const res = await fetch(`${API}/songwriter`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request: `${context()}\nКлиентская задача: ${text}`, mode: "SONG" }) }); if (!res.ok) throw new Error(await readError(res)); const data = await res.json(); add({ role: "assistant", text: data.answer || "Готово." }); }
-      else if (tool === "trends") { const res = await fetch(`${API}/songwriter/trends`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ focus: `${context()}\nНовая задача: ${text}` }) }); if (!res.ok) throw new Error(await readError(res)); const data = await res.json(); add({ role: "assistant", text: data.report || data.answer || JSON.stringify(data, null, 2) }); }
-      else if (tool === "analyzer") { const data = await uploadAudio(); add({ role: "assistant", text: formatAnalysis(data.analysis || data) }); }
-      else if (tool === "master") { await uploadAudio(); const lufs = text.match(/-?\d+(?:[.,]\d+)?\s*LUFS/i)?.[0]?.replace(",", "."); const ceiling = text.match(/(?:ceiling|пик|потолок)[^\d-]*(-?\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", "."); const intensity = /плот|агрессив|громк/i.test(text) ? "aggressive" : /мяг|динами|натурал/i.test(text) ? "gentle" : "balanced"; const res = await fetch(`${API}/master`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_lufs: lufs ? Number(lufs) : -10.5, ceiling_db: ceiling ? Number(ceiling) : -1, intensity, profile: "suno6_commercial" }) }); if (!res.ok) throw new Error(await readError(res)); const data = await res.json(); add({ role: "assistant", text: `Мастеринг завершён.\n\nTarget: ${data.final_analysis?.lufs ?? "—"} LUFS\nПрофиль: ${intensity}\nCeiling: ${ceiling ? `${ceiling} dB` : "-1 dB"}\n\nЕсли хочешь другой характер — напиши, например: «сделай мягче», «сделай плотнее» или «дай -9 LUFS».` }); }
-    } catch (e) { add({ role: "assistant", text: `Не удалось выполнить запрос: ${String(e).replace(/^Error:\s*/, "")}` }); } finally { setBusy(false); }
+  function selectAudio(next?: File) {
+    if (!next) return;
+    const ext = next.name.split(".").pop()?.toLowerCase() || "";
+    if (!EXTENSIONS.includes(ext)) { add({ role: "assistant", text: `${c.badFormat}` }); return; }
+    if (next.size > MAX_BYTES) { add({ role: "assistant", text: c.fileTooBig }); return; }
+    setFile(next); add({ role: "assistant", text: `${c.fileAccepted}\n${next.name}` });
   }
-  return <div className="app"><header className="header"><button className="brand" onClick={() => go("home")}><b>Eliza Bett</b><span>MUSIC LAB</span></button><nav className={mobileOpen ? "nav open" : "nav"}>{[["Главная", "home"], ["AI Инструменты", "tools"], ["Треки", "tracks"], ["Проекты", "projects"], ["Тарифы", "pricing"], ["О нас", "about"]].map(([label, id]) => <button className={page === id ? "active" : ""} key={id} onClick={() => go(id)}>{label}</button>)}</nav><div className="head-actions"><span className="lang"><Globe2 size={15}/> <b>RU</b> <span>EN</span></span><button className="telegram" onClick={openTelegram}><TelegramIcon size={17}/> Открыть в Telegram</button><button className="menu" onClick={() => setMobileOpen(v => !v)}>{mobileOpen ? <X/> : <Menu/>}</button></div></header>
-    {page === "home" && <Home go={go} openTool={openTool} openTelegram={openTelegram} />}
-    {page === "tools" && <Workspace tool={tool} selectTool={selectTool} messages={messages[tool]} input={input} setInput={setInput} send={send} busy={busy} file={file} inputRef={inputRef} selectAudio={selectAudio} currentTool={currentTool} />}
-    {page === "tracks" && <Simple title="Треки" text="Музыка, версии и готовые релизы — в одном месте." />}
-    {page === "projects" && <Simple title="Проекты" text="Сохраняй идеи, версии, референсы и финальные мастера." />}
-    {page === "pricing" && <Simple title="Тарифы" text="Выбери уровень AI-инструментов под свой объём работы." />}
-    {page === "about" && <Simple title="Eliza Bett Music Lab" text="AI-пространство для музыканта — от идеи до готового релиза." />}
-    <footer className="footer"><div className="footer-brand"><b>Eliza Bett</b><span>MUSIC LAB</span></div><div className="footer-links"><button onClick={() => go("about")}>Конфиденциальность</button><button onClick={() => go("pricing")}>Условия</button><button onClick={() => go("about")}>Поддержка</button></div><div className="socials"><button aria-label="Telegram" onClick={openTelegram}><TelegramIcon size={17}/></button><button aria-label="YouTube"><span>▶</span></button><button aria-label="TikTok"><span>♪</span></button><button aria-label="Instagram"><span>◎</span></button></div><div className="footer-note">СЛУШАЙ. СОЗДАВАЙ.<br/>ВДОХНОВЛЯЙ.</div></footer>
+  async function uploadAudio() {
+    if (!file) throw new Error(c.noFile);
+    const body = new FormData(); body.append("file", file);
+    const res = await fetch(`${API}/upload`, { method: "POST", body });
+    if (!res.ok) throw new Error(await readError(res));
+    return res.json();
+  }
+  function context() { return messages[tool].slice(-8).map((m) => `${m.role === "user" ? "Client" : "AI"}: ${m.text}`).join("\n"); }
+  function languageInstruction() { return lang === "ru" ? "Отвечай на русском языке." : "Respond in English."; }
+  async function send(forcedText?: string) {
+    const text = (forcedText ?? input).trim();
+    if ((!text && tool !== "analyzer") || busy) return;
+    if (text) add({ role: "user", text });
+    setInput(""); setBusy(true);
+    try {
+      if (tool === "songwriter") {
+        const res = await fetch(`${API}/songwriter`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request: `${languageInstruction()}\n${context()}\nClient task: ${text}`, mode: "SONG" }) });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json(); add({ role: "assistant", text: data.answer || "Done." });
+      } else if (tool === "trends") {
+        const res = await fetch(`${API}/songwriter/trends`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ focus: `${languageInstruction()}\n${context()}\nNew task: ${text}` }) });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json(); add({ role: "assistant", text: data.report || data.answer || JSON.stringify(data, null, 2) });
+      } else if (tool === "analyzer") {
+        const data = await uploadAudio(); add({ role: "assistant", text: formatAnalysis(data.analysis || data, lang) });
+      } else if (tool === "master") {
+        await uploadAudio();
+        const lower = text.toLowerCase();
+        const lufs = text.match(/-?\d+(?:[.,]\d+)?\s*LUFS/i)?.[0]?.replace(",", ".");
+        const ceiling = text.match(/(?:ceiling|пик|потолок)[^\d-]*(-?\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", ".");
+        const auto = /auto|авто|автомат/i.test(lower) || !text || /сделай|сделать|улучши|улучшить|master|мастер/i.test(lower);
+        const intensity = auto ? "auto" : /плот|агрессив|громк|loud/i.test(lower) ? "aggressive" : /мяг|динами|натурал|gentle/i.test(lower) ? "gentle" : "balanced";
+        const res = await fetch(`${API}/master`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target_lufs: lufs ? Number(lufs) : -10.5, ceiling_db: ceiling ? Number(ceiling) : -1, intensity, profile: auto ? "latest_auto" : "suno6_commercial" }) });
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json();
+        const output = String(data.final_output || "").split(/[\\/]/).pop();
+        const url = output ? `${API}/files/optimizer_output/${encodeURIComponent(output)}` : "";
+        const target = data.target_lufs ?? data.final_analysis?.lufs ?? "—";
+        const result = lang === "ru"
+          ? `${c.masterDone}\n\nTarget: ${target} LUFS\nCeiling: ${ceiling ? `${ceiling} dB` : "-1 dB"}\n${data.auto_reason || ""}\n\n${c.masterLatest}${url ? `\n${c.download}: ${url}` : ""}`
+          : `${c.masterDone}\n\nTarget: ${target} LUFS\nCeiling: ${ceiling ? `${ceiling} dB` : "-1 dB"}\n${data.auto_reason || ""}\n\n${c.masterLatest}${url ? `\n${c.download}: ${url}` : ""}`;
+        add({ role: "assistant", text: result });
+      }
+    } catch (e) { add({ role: "assistant", text: `${lang === "ru" ? "Не удалось выполнить запрос" : "Request failed"}: ${String(e).replace(/^Error:\s*/, "")}` }); }
+    finally { setBusy(false); }
+  }
+  return <div className="app"><header className="header"><button className="brand" onClick={() => go("home")}><b>Eliza Bett</b><span>MUSIC LAB</span></button><nav className={mobileOpen ? "nav open" : "nav"}>{c.nav.map((label, i) => { const ids = ["home", "tools", "tracks", "projects", "pricing", "about"]; return <button className={page === ids[i] ? "active" : ""} key={ids[i]} onClick={() => go(ids[i])}>{label}</button>; })}</nav><div className="head-actions"><span className="lang"><Globe2 size={15}/><button className={lang === "ru" ? "active" : ""} onClick={() => changeLang("ru")}>RU</button><span>/</span><button className={lang === "en" ? "active" : ""} onClick={() => changeLang("en")}>EN</button></span><button className="telegram" onClick={openTelegram}><TelegramIcon size={17}/> {c.telegram}</button><button className="menu" onClick={() => setMobileOpen(v => !v)}>{mobileOpen ? <X/> : <Menu/>}</button></div></header>
+    {page === "home" && <Home c={c} go={go} openTool={openTool} openTelegram={openTelegram} />}
+    {page === "tools" && <Workspace c={c} lang={lang} tool={tool} tools={tools} selectTool={selectTool} messages={messages[tool]} input={input} setInput={setInput} send={send} busy={busy} file={file} inputRef={inputRef} selectAudio={selectAudio} currentTool={currentTool} />}
+    {(["tracks", "projects", "pricing", "about"] as const).includes(page as any) && <Simple title={c.pages[page as "tracks" | "projects" | "pricing" | "about"][0]} text={c.pages[page as "tracks" | "projects" | "pricing" | "about"][1]} />}
+    <footer className="footer"><div className="footer-brand"><b>Eliza Bett</b><span>MUSIC LAB</span></div><div className="footer-links"><button onClick={() => go("about")}>{lang === "ru" ? "Конфиденциальность" : "Privacy"}</button><button onClick={() => go("pricing")}>{lang === "ru" ? "Условия" : "Terms"}</button><button onClick={() => go("about")}>{lang === "ru" ? "Поддержка" : "Support"}</button></div><div className="socials"><button aria-label="Telegram" onClick={openTelegram}><TelegramIcon size={17}/></button><button aria-label="YouTube"><span>▶</span></button><button aria-label="TikTok"><span>♪</span></button><button aria-label="Instagram"><span>◎</span></button></div><div className="footer-note">{c.footer.split("\n").map((x, i) => <span key={i}>{x}<br/></span>)}</div></footer>
   </div>;
 }
-function Home({ go, openTool, openTelegram }: { go: (p: string) => void; openTool: (id: ToolId) => void; openTelegram: () => void }) { return <main><section className="hero"><div className="hero-copy"><span className="eyebrow">MUSIC · AI · CREATIVITY · NO LIMITS</span><h1>Eliza Bett<br/><em>Music Lab</em></h1><p className="hero-title">Создавай. Анализируй. Улучшай. Выпускай.</p><p className="muted">Все инструменты для твоей музыки — в одном месте.</p><div className="hero-actions"><button className="primary" onClick={() => go("tools")}>Начать сейчас <ArrowRight size={17}/></button><button className="secondary" onClick={() => openTool("songwriter")}><span className="play-circle"><Play size={12} fill="currentColor"/></span> Смотреть видео</button></div><div className="stats"><div><b>5K+</b><span>создано треков</span></div><div><b>98%</b><span>довольных авторов</span></div><div><b>∞</b><span>без границ</span></div><div><b>#1</b><span>AI для музыкантов</span></div></div></div><div className="hero-art"><div className="vinyl"><div className="vinyl-center">ELIZA<br/><i>BETT</i></div></div><div className="wave-ribbon one"/><div className="wave-ribbon two"/><div className="hero-caption">TURN IDEAS<br/>INTO<br/>MUSIC</div><div className="player-card"><div className="cover"><Play size={16} fill="currentColor"/></div><div><b>ВСЁ РАВНО</b><span>Eliza Bett · 2026</span><div className="mini-wave"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></div><time>2:48</time></div></div></section><section className="product-grid">{tools.map(t => <button key={t.id} onClick={() => openTool(t.id)}><span className="tool-icon"><t.icon size={24}/></span><span className="tool-copy"><b>{t.title}</b><small>{t.description}</small></span><span className="circle-arrow"><ArrowRight size={14}/></span></button>)}</section><section className="promo-grid"><div className="telegram-banner"><div className="telegram-mark"><TelegramIcon size={34}/></div><div className="promo-copy"><h3>Telegram Mini App</h3><p>Создавай музыку прямо в Telegram.<br/>Всегда с тобой.</p><button className="light-button" onClick={openTelegram}><TelegramIcon size={15}/> Открыть в Telegram <ArrowRight size={14}/></button><div className="chips"><span>◇ Быстро</span><span>⌁ Удобно</span><span>♧ Все функции</span></div></div><div className="paper-plane"><TelegramIcon size={105}/></div><span className="side-label">MUSIC<br/>ANYWHERE<br/>WITH YOU</span></div><div className="projects-banner"><div><span className="eyebrow">YOUR WORKSPACE</span><h3>Твои треки.<br/>Твоя история.</h3><p>Сохраняй проекты, делись,<br/>развивайся. Всё в одном месте.</p><button className="light-button" onClick={() => go("projects")}>Создать проект <ArrowRight size={14}/></button></div><div className="folder-art"><div className="folder">♪</div><div className="folder back">♫</div></div><span className="side-label">IDEAS<br/>TRACKS<br/>RESULTS</span></div></section><section className="lower-grid"><div><div className="section-head"><h2>Последние треки</h2><button onClick={() => go("tracks")}>Смотреть все <ArrowRight size={14}/></button></div><div className="tracks">{["Всё равно", "Тише", "Кукла Вуду", "Новый мир"].map((name, i) => <button className={`track-card t${i}`} key={name}><div className="track-art"><span>{i === 0 ? "◌" : i === 1 ? "╱╲" : i === 2 ? "◉" : "◒"}</span></div><div className="track-info"><b>{name}</b><small>{i === 1 ? "ACOUSTIC" : i === 3 ? "R&B" : "POP"} · 2026</small></div><span className="track-play"><Play size={12} fill="currentColor"/></span></button>)}</div></div><div><div className="section-head"><h2>Тренды сейчас</h2><button onClick={() => openTool("trends")}>Смотреть все <ArrowRight size={14}/></button></div><div className="trend-list">{["Atmospheric Pop", "Acoustic + AI Vocals", "Dark Pop", "Русский поп 2.0"].map((name, i) => <button key={name} onClick={() => openTool("trends")}><b>{i + 1}</b><span className={`trend-art a${i}`}/><span className="trend-copy"><strong>{name}</strong><small>{["Популярно в TikTok", "Новый тренд", "Растущая популярность", "В тренде"][i]}</small></span><AudioWaveform size={21}/></button>)}</div></div></section></main> }
-function Workspace({ tool, selectTool, messages, input, setInput, send, busy, file, inputRef, selectAudio, currentTool }: any) { return <main className="workspace-page"><div className="workspace-top"><div><span className="eyebrow">AI MUSIC WORKSPACE</span><h1>Работаем как в чате</h1><p>Каждая вкладка — отдельный продукт и отдельный контекст.</p></div><span className="status"><i/> ENGINE ONLINE</span></div><div className="workspace"><aside className="product-tabs">{tools.map(({ id, title, description, icon: Icon }: Tool) => <button className={tool === id ? "active" : ""} key={id} onClick={() => selectTool(id)}><Icon size={20}/><span><b>{title}</b><small>{description}</small></span><ChevronRight size={15}/></button>)}</aside><section className="chat"><div className="chat-head"><div><span>ELIZA BETT ENGINE</span><h2>{currentTool.title}</h2></div><span className="context-pill"><Sparkles size={13}/> Контекст сохраняется</span></div><div className="chat-body">{messages.map((m: Message, i: number) => <div className={m.role === "user" ? "bubble-row user" : "bubble-row"} key={i}><div className="avatar">{m.role === "user" ? "YOU" : "EB"}</div><div className="bubble">{m.text}</div></div>)}{busy && <div className="bubble-row"><div className="avatar">EB</div><div className="bubble typing"><i/><i/><i/></div></div>}</div><div className="composer"><div className="composer-tools">{(tool === "analyzer" || tool === "master") && <><input ref={inputRef} type="file" className="hidden" onChange={(e) => selectAudio(e.target.files?.[0])}/><button onClick={() => inputRef.current?.click()}><Upload size={15}/>{file ? file.name : "Загрузить аудио"}</button></>}{tool === "master" && <span className="hint"><Zap size={13}/> Можно написать «-9 LUFS, плотнее»</span>}</div><div className="input-row"><textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={tool === "songwriter" ? "Напиши, какой трек создаём..." : tool === "analyzer" ? "Что проверить в треке?" : tool === "master" ? "Каким должен быть мастер?" : "Какой тренд ищем?"}/><button className="send" onClick={send} disabled={busy || !input.trim()}>{busy ? <span className="spinner"/> : <Send size={17}/>}</button></div><small>Enter — отправить · Shift + Enter — новая строка</small></div></section></div></main> }
-function formatAnalysis(data: any) { if (typeof data === "string") return data; const entries = Object.entries(data || {}).slice(0, 16); return entries.length ? entries.map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join("\n") : "Анализ готов, но backend не вернул метрики."; }
-function Simple({ title, text }: { title: string; text: string }) { return <main className="simple"><span className="eyebrow">ELIZA BETT MUSIC LAB</span><h1>{title}</h1><p>{text}</p></main> }
+
+function initialMessages(lang: Lang): Record<ToolId, Message[]> {
+  if (lang === "en") return {
+    songwriter: [{ role: "assistant", text: "I am AI Songwriter. Tell me the theme, mood, artist reference, language and structure. I will refine the result with you." }],
+    analyzer: [{ role: "assistant", text: "I am Audio Analyzer. Upload a track and I will inspect loudness, dynamics, stereo, clipping, balance and mastering readiness." }],
+    master: [{ role: "assistant", text: "I am AI Mastering. Upload your track and choose Auto mastering or describe the target sound. Auto mode uses Master Engine 6.5 and compares two safe variants." }],
+    trends: [{ role: "assistant", text: "I am Trends. Give me a genre, platform, audience or artist and I will turn current directions into practical track ideas." }],
+  };
+  return {
+    songwriter: [{ role: "assistant", text: "Я AI Songwriter. Опиши тему, настроение, референс артиста, язык и структуру — я буду уточнять детали и доводить результат." }],
+    analyzer: [{ role: "assistant", text: "Я Audio Analyzer. Загрузи трек — проверю громкость, динамику, стерео, клиппинг, баланс и готовность к мастерингу." }],
+    master: [{ role: "assistant", text: "Я AI Mastering. Загрузи трек и выбери «Авто-мастеринг» или опиши желаемый характер. Авто использует Master Engine 6.5 и сравнивает два безопасных варианта." }],
+    trends: [{ role: "assistant", text: "Я Trends. Назови жанр, платформу, аудиторию или артиста — превращу актуальные направления в конкретные идеи для трека." }],
+  };
+}
+
+function Home({ c, go, openTool, openTelegram }: any) { return <main><section className="hero"><div className="hero-copy"><span className="eyebrow">MUSIC · AI · CREATIVITY · NO LIMITS</span><h1>Eliza Bett<br/><em>Music Lab</em></h1><p className="hero-title">{c.heroTitle}</p><p className="muted">{c.heroText}</p><div className="hero-actions"><button className="primary" onClick={() => go("tools")}>{c.start} <ArrowRight size={17}/></button><button className="secondary" onClick={() => openTool("songwriter")}><span className="play-circle"><Play size={12} fill="currentColor"/></span> {c.video}</button></div><div className="stats">{[["5K+", c.stats[0]], ["98%", c.stats[1]], ["∞", c.stats[2]], ["#1", c.stats[3]]].map(([a,b]) => <div key={a}><b>{a}</b><span>{b}</span></div>)}</div></div><div className="hero-art"><div className="vinyl"><div className="vinyl-center">ELIZA<br/><i>BETT</i></div></div><div className="wave-ribbon one"/><div className="wave-ribbon two"/><div className="hero-caption">TURN IDEAS<br/>INTO<br/>MUSIC</div><div className="player-card"><div className="cover"><Play size={16} fill="currentColor"/></div><div><b>ВСЁ РАВНО</b><span>Eliza Bett · 2026</span><div className="mini-wave">{Array.from({length:14}, (_,i) => <i key={i}/>)}</div></div><time>2:48</time></div></div></section><section className="product-grid">{[0,1,2,3].map((i) => <button key={i} onClick={() => openTool((["songwriter","analyzer","master","trends"] as ToolId[])[i])}><span className="tool-icon">{[PenLine,AudioWaveform,SlidersHorizontal,Flame].map((Icon,j) => j===i ? <Icon key={i} size={24}/> : null)}</span><span className="tool-copy"><b>{c.tools[i]}</b><small>{c.descriptions[i]}</small></span><span className="circle-arrow"><ArrowRight size={14}/></span></button>)}</section><section className="promo-grid"><div className="telegram-banner"><div className="telegram-mark"><TelegramIcon size={34}/></div><div className="promo-copy"><h3>{c.telegramTitle}</h3><p>{c.telegramText.split("\n").map((x,i)=><span key={i}>{x}<br/></span>)}</p><button className="light-button" onClick={openTelegram}><TelegramIcon size={15}/> {c.telegram} <ArrowRight size={14}/></button><div className="chips"><span>◇ Fast</span><span>⌁ Simple</span><span>♧ All tools</span></div></div><div className="paper-plane"><TelegramIcon size={105}/></div><span className="side-label">MUSIC<br/>ANYWHERE<br/>WITH YOU</span></div><div className="projects-banner"><div><span className="eyebrow">YOUR WORKSPACE</span><h3>{c.projectsTitle.split("\n").map((x,i)=><span key={i}>{x}<br/></span>)}</h3><p>{c.projectsText}</p><button className="light-button" onClick={() => go("projects")}>{c.lang === "en" ? "Create project" : "Создать проект"} <ArrowRight size={14}/></button></div><div className="folder-art"><div className="folder">♪</div><div className="folder back">♫</div></div><span className="side-label">IDEAS<br/>TRACKS<br/>RESULTS</span></div></section><section className="lower-grid"><div><div className="section-head"><h2>{c.latest}</h2><button onClick={() => go("tracks")}>{c.all} <ArrowRight size={14}/></button></div><div className="tracks">{["Всё равно", "Тише", "Кукла Вуду", "Новый мир"].map((name, i) => <button className={`track-card t${i}`} key={name}><div className="track-art"><span>{i === 0 ? "◌" : i === 1 ? "╱╲" : i === 2 ? "◉" : "◒"}</span></div><div className="track-info"><b>{name}</b><small>{i === 1 ? "ACOUSTIC" : i === 3 ? "R&B" : "POP"} · 2026</small></div><span className="track-play"><Play size={12} fill="currentColor"/></span></button>)}</div></div><div><div className="section-head"><h2>{c.trends}</h2><button onClick={() => openTool("trends")}>{c.all} <ArrowRight size={14}/></button></div><div className="trend-list">{["Atmospheric Pop", "Acoustic + AI Vocals", "Dark Pop", "Русский поп 2.0"].map((name, i) => <button key={name} onClick={() => openTool("trends")}><b>{i + 1}</b><span className={`trend-art a${i}`}/><span className="trend-copy"><strong>{name}</strong><small>{["Popular on TikTok", "New trend", "Growing", "Trending"][i]}</small></span><AudioWaveform size={21}/></button>)}</div></div></section></main>; }
+
+function Workspace({ c, lang, tool, tools, selectTool, messages, input, setInput, send, busy, file, inputRef, selectAudio, currentTool }: any) {
+  const placeholder = tool === "songwriter" ? c.songwriterPlaceholder : tool === "analyzer" ? c.analyzerPlaceholder : tool === "master" ? c.masterPlaceholder : c.trendsPlaceholder;
+  return <main className="workspace-page"><div className="workspace-top"><div><span className="eyebrow">AI MUSIC WORKSPACE</span><h1>{c.workspace}</h1><p>{c.workspaceText}</p></div><span className="status"><i/>{c.online}</span></div><div className="workspace"><aside className="product-tabs">{tools.map((item: Tool) => <button className={tool === item.id ? "active" : ""} key={item.id} onClick={() => selectTool(item.id)}><item.icon size={20}/><span><b>{item.title}</b><small>{item.description}</small></span><ChevronRight size={15}/></button>)}</aside><section className="chat"><div className="chat-head"><div><span>ELIZA BETT ENGINE</span><h2>{currentTool.title}</h2></div><span className="context-pill"><Sparkles size={13}/> {c.context}</span></div><div className="chat-body">{messages.map((m: Message, i: number) => <div className={m.role === "user" ? "bubble-row user" : "bubble-row"} key={i}><div className="avatar">{m.role === "user" ? "YOU" : "EB"}</div><div className="bubble">{m.text.includes("/files/optimizer_output/") ? <>{m.text.split("\n").map((line: string, j: number) => line.includes("/files/optimizer_output/") ? <div key={j} className="master-link"><a href={line.split(": ").slice(1).join(": ")} target="_blank" rel="noreferrer"><Download size={13}/> {c.download}</a></div> : <div key={j}>{line}</div>)}</> : m.text.split("\n").map((line: string, j: number) => <div key={j}>{line}</div>)}</div></div>)}{busy && <div className="bubble-row"><div className="avatar">EB</div><div className="bubble typing"><i/><i/><i/></div></div>}</div><div className="composer">{(tool === "analyzer" || tool === "master") && <div className="composer-tools"><input ref={inputRef} type="file" className="hidden" onChange={(e) => selectAudio(e.target.files?.[0])}/><button onClick={() => inputRef.current?.click()}><Upload size={15}/>{file ? file.name : c.upload}</button>{tool === "analyzer" && <button onClick={() => send(c.analyze)} disabled={!file || busy}><AudioWaveform size={14}/>{c.analyze}</button>}{tool === "master" && <button onClick={() => send(c.auto)} disabled={!file || busy}><Zap size={14}/>{c.auto}</button>}</div>}{tool === "master" && <div className="master-hint"><Sparkles size={13}/>{c.masterHint}</div>}<div className="input-row"><textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={placeholder}/><button className="send" onClick={() => send()} disabled={busy || (!input.trim() && tool !== "analyzer")}>{busy ? <span className="spinner"/> : <Send size={17}/>}</button></div><small>Enter — {lang === "ru" ? "отправить" : "send"} · Shift + Enter — {lang === "ru" ? "новая строка" : "new line"}</small></div></section></div></main>;
+}
+
+function formatAnalysis(data: any, lang: Lang) { if (typeof data === "string") return data; const entries = Object.entries(data || {}).slice(0, 18); if (!entries.length) return lang === "ru" ? "Анализ готов, но backend не вернул метрики." : "Analysis complete, but no metrics were returned."; return entries.map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join("\n"); }
+function Simple({ title, text }: { title: string; text: string }) { return <main className="simple"><span className="eyebrow">ELIZA BETT MUSIC LAB</span><h1>{title}</h1><p>{text}</p></main>; }
