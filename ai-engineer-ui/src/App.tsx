@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity, AudioWaveform, BarChart3, BrainCircuit, Check, CheckCircle2, ChevronRight,
   CircleHelp, Download, FileAudio, Gauge, Headphones, Layers3, Library, Mic2, Package, Pause, PenLine,
@@ -80,7 +80,6 @@ export default function App() {
   const decisions = analysis?.decisions || [];
   const profileCfg = profiles[profile];
   const masterAnalysis = master?.final_analysis || {};
-  const selected = master?.selected_candidate || {};
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -93,12 +92,6 @@ export default function App() {
   }, [preview, a.lufs, masterAnalysis.lufs, currentAudio]);
 
 
-  const metricRows = useMemo(() => [
-    { label: "LUFS", value: num(a.lufs, 1), meta: `target ${profileCfg.target.toFixed(1)}` },
-    { label: "TRUE PEAK", value: `${num(a.true_peak_dbfs, 2)} dBTP`, meta: "measured" },
-    { label: "CREST", value: `${num(a.crest_factor_db, 1)} dB`, meta: "dynamics" },
-    { label: "CORRELATION", value: num(a.mono_correlation, 2), meta: "mono check" },
-  ], [a, profileCfg]);
 
   async function uploadTo(endpoint: string, selectedFile: File) {
     const body = new FormData(); body.append("file", selectedFile);
@@ -242,7 +235,6 @@ export default function App() {
   function togglePlay() { const el = audioRef.current; if (!el) return; if (el.paused) { void el.play(); setPlaying(true); } else { el.pause(); setPlaying(false); } }
 
   const displayTitle = file?.name || "No track loaded";
-  const decisionSummary = decisions.slice(0, 5);
   const candidateRows = master?.candidates || [];
 
   return <div className="lab">
@@ -275,7 +267,7 @@ export default function App() {
           <WaveformTimeline original={originalTimeline} master={masterTimeline} progress={progress} duration={duration} onSeek={(t:number) => { if(audioRef.current) audioRef.current.currentTime=t; }} />
         </>}
 
-        {active === "Overview" && <HomeDashboard file={file} analysis={analysis} profile={profileCfg} busy={busy} productionBusy={productionBusy} master={master} onUpload={() => inputRef.current?.click()} onProduce={runProduction} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} onSeek={(t:number) => { if(audioRef.current) audioRef.current.currentTime=t; }} displayTitle={displayTitle} setDuration={setDuration} setProgress={setProgress} />}
+        {active === "Overview" && <HomeDashboard file={file} analysis={analysis} busy={busy} onUpload={() => inputRef.current?.click()} onMaster={runMaster} onNavigate={setActive} onPlay={togglePlay} playing={playing} currentAudio={currentAudio} audioRef={audioRef} duration={duration} progress={progress} setDuration={setDuration} setProgress={setProgress} />}
 
         {active === "Production" && <ProductionPage production={production} busy={productionBusy} run={runProduction} masterUrl={masterUrl} finalize={finalizeProject} projectBusy={projectBusy} projectBundle={projectBundle} />}
 
@@ -299,11 +291,11 @@ export default function App() {
 }
 
 
-function HomeDashboard({file, analysis, profile, busy, productionBusy, master, onUpload, onProduce, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, onSeek, displayTitle, setDuration, setProgress}: any) {
+function HomeDashboard({file, analysis, busy, onUpload, onMaster, onNavigate, onPlay, playing, currentAudio, audioRef, duration, progress, setDuration, setProgress}: any) {
   const projectName = file?.name ? file.name.replace(/\.[^/.]+$/, "") : "New Song";
   const bpm = analysis?.bpm || analysis?.adaptive_analysis?.bpm;
   const key = analysis?.key || analysis?.adaptive_analysis?.key || "Key estimate";
-  const tools = [
+  const tools: [string, string, typeof Activity, string][] = [
     ["Music Analysis", "BPM, Key, Structure, Vocal, Energy", Waves, "Analyzer"],
     ["Songwriter", "Ideas, Lyrics, Trends, Artist DNA", PenLine, "Songwriter"],
     ["Song Director", "Full Concept & Suno Prompt", Sparkles, "Songwriter"],
@@ -356,7 +348,6 @@ function formatTime(sec:number){ const s=Math.max(0,Math.floor(Number(sec)||0));
 function PanelHead({ kicker, title, icon }: { kicker:string; title:string; icon:React.ReactNode }) { return <div className="panel-head"><div><span className="kicker">{kicker}</span><h2>{title}</h2></div><span className="panel-icon">{icon}</span></div>; }
 function Empty({ icon, text }: { icon:React.ReactNode; text:string }) { return <div className="empty"><span>{icon}</span><p>{text}</p></div>; }
 function Decision({ d }: { d:any }) { return <div className="decision"><div className="decision-icon"><Waves size={14}/></div><div className="decision-main"><div className="decision-top"><b>{clean(d.problem || d.action || "TARGET")}</b><span>{severity(d.severity)}</span></div><p>{d.frequency_range || d.band || "adaptive band"}</p><small>{d.context || d.reason || "Adaptive signal detected relative to the track profile."}</small></div><strong>{d.gain_db != null ? `${Number(d.gain_db).toFixed(1)} dB` : "CONTROL"}</strong></div>; }
-function MasterSummary({ master, masterAnalysis, selected }: any) { return <div className="master-result"><div className="result-score"><div><span>QC SCORE</span><b>{num(selected.score,1)}</b><small>/ 100</small></div><div className={master.rollback ? "status bad" : "status good"}>{master.rollback ? "ROLLBACK" : "ACCEPTED"}</div></div><div className="result-values"><div><span>LUFS</span><b>{num(masterAnalysis.lufs,2)}</b></div><div><span>TRUE PEAK</span><b>{num(masterAnalysis.true_peak_dbfs,2)} dBTP</b></div><div><span>CREST</span><b>{num(masterAnalysis.crest_factor_db,1)} dB</b></div></div><div className="result-note"><CheckCircle2 size={14}/>{master.rollback ? "Processing was rejected; original audio was preserved." : `Selected ${selected.name || "best candidate"} after QC.`}</div></div>; }
 function IntelligencePage({ intelligence, masterIntelligence }: any) {
   const data = intelligence?.spectral?.segments || [];
   const stereo = intelligence?.stereo?.segments || [];
@@ -380,7 +371,7 @@ function IntelligencePage({ intelligence, masterIntelligence }: any) {
 function midiNote(midi:number){ try { const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]; const m=Math.round(Number(midi)); return `${names[(m%12+12)%12]}${Math.floor(m/12)-1}`; } catch { return "—"; } }
 
 function Analyzer({ analysis, bands, decisions }: any) { return <><section className="surface panel"><PanelHead kicker="SPECTRAL INTELLIGENCE" title="Band profile" icon={<Waves size={16}/>}/>{analysis ? <div className="band-grid">{Object.entries(bands).map(([k,v])=><div className="band" key={k}><div><span>{clean(k)}</span><b>{num(v,2)}%</b></div><div className="band-track"><i style={{width:`${Math.min(100, Number(v)*4)}%`}}/></div></div>)}</div> : <Empty icon={<Waves size={20}/>} text="Load a track to inspect spectral energy."/>}</section><section className="surface panel section-gap"><PanelHead kicker="SIGNAL MAP" title="Decision context" icon={<Activity size={16}/>}/><div className="decision-list">{decisions.length ? decisions.map((d:any,i:number)=><Decision d={d} key={i}/>) : <Empty icon={<Gauge size={20}/>} text="No decision context yet."/>}</div></section></>; }
-function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory }: any) {
+function SongwriterPage({ audioSongContext, melodyMap, mode, setMode, request, setRequest, result, setWriterResult, trend, director, directorBusy, busy, run, direct, trends, save, rebuild, dna, memory, editorStage, setEditorStage, songVersions, setWriterVersion, songAnalysis, setSongAnalysis, analyzeWriterText }: any) {
   const modes = [["IDEA","Ideas"],["HOOK","Hooks"],["CHORUS","Chorus"],["SONG","Full song"],["EDIT","Edit"],["RHYME","Rhyme"],["PROSODY","Prosody"],["TREND","Trend"]];
   const stages = [["IDEA","01"],["HOOK","02"],["CHORUS","03"],["VERSE","04"],["BRIDGE","05"],["FINAL","06"]];
   const songs = memory?.recent || [];
