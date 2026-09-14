@@ -26,7 +26,7 @@ Recommended Render settings:
 - `OPENAI_MODEL=gpt-5.6` (or another model enabled for the OpenAI project)
 - Optional: `OPENAI_TIMEOUT_SECONDS=90`
 
-`OPENAI_API_KEY` must exist only on the backend. Never put it in Vercel frontend variables or commit it to Git. OpenAI documents API keys as secrets that should be loaded server-side. citeturn0search1
+`OPENAI_API_KEY` must exist only on the backend. Never put it in Vercel frontend variables or commit it to Git.
 
 After Render gives you the backend URL, put it into Vercel as `VITE_API_URL` and redeploy the frontend.
 
