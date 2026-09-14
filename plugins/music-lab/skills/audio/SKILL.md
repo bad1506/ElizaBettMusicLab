@@ -1,6 +1,6 @@
 ---
 name: music-lab-audio
- description: Analyze, process and debug audio workflows safely, including uploads, stems and mastering inputs.
+description: Analyze, process and debug audio workflows safely, including uploads, stems and mastering inputs.
 ---
 
 # Music Lab Audio
