@@ -8,3 +8,5 @@
 - Added persistent glass mini-player on Home.
 - Applied peach #FFC6A8 and burgundy #741A2F visual language with frosted glass surfaces.
 - Preserved existing backend workflows and non-Overview pages.
+
+<!-- GitHub connector write test: 2026-09-14 -->
