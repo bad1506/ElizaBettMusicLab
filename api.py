@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import uuid
@@ -9,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import ai_assistant
 import master_engine
@@ -33,9 +34,24 @@ PROJECT_DIR = BASE / "project_data"
 for d in (INPUT_DIR, OUTPUT_DIR, SEPARATED_DIR, REFERENCE_DIR, PROJECT_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Eliza Bett Music Lab AI Engineer", version="11.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+APP_VERSION = "11.2.0"
+app = FastAPI(title="Eliza Bett Music Lab AI Engineer", version=APP_VERSION)
+
+# Comma-separated production frontend origins can be supplied through CORS_ORIGINS.
+# Local development remains enabled by default.
+def _cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ORIGINS", "")
+    defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return [origin.strip() for origin in configured.split(",") if origin.strip()] or defaults
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/files/input", StaticFiles(directory=str(INPUT_DIR)), name="input_files")
 app.mount("/files/optimizer_output", StaticFiles(directory=str(OUTPUT_DIR)), name="optimizer_files")
 app.mount("/files/separated", StaticFiles(directory=str(SEPARATED_DIR)), name="separated_files")
@@ -66,12 +82,12 @@ def build_analysis() -> dict[str, Any]:
 
 @app.get("/")
 def root():
-    return {"status": "online", "service": "Eliza Bett Music Lab AI Engineer", "version": "10.0.0"}
+    return {"status": "online", "service": "Eliza Bett Music Lab AI Engineer", "version": APP_VERSION}
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "10.0.0"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 @app.post("/upload")
@@ -107,8 +123,6 @@ def timeline(source: str = "original"):
 @app.get("/timeline")
 def get_timeline(source: str = "original"):
     return timeline(source)
-
-
 
 
 @app.get("/songwriter/audio-context")
@@ -150,7 +164,7 @@ def intelligence(source: str = "original"):
 class SongwriterRequest(BaseModel):
     request: str
     mode: str = "SONG"
-    context: dict[str, Any] = {}
+    context: dict[str, Any] = Field(default_factory=dict)
     trend_context: str = ""
 
 
@@ -162,8 +176,8 @@ class SongMemoryRequest(BaseModel):
     title: str = "Untitled draft"
     text: str
     mode: str = "SONG"
-    tags: list[str] = []
-    metadata: dict[str, Any] = {}
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SongNoteRequest(BaseModel):
@@ -191,7 +205,7 @@ def songwriter_trends(request: TrendRequest):
 
 class SongDirectorRequest(BaseModel):
     request: str = ""
-    context: dict[str, Any] = {}
+    context: dict[str, Any] = Field(default_factory=dict)
     trend_context: str = ""
 
 
@@ -328,8 +342,7 @@ def project_save(request: ProjectRequest):
 
 @app.post("/project/export")
 def project_export(request: ProjectRequest):
-    result = project_manager.export_bundle(INPUT_DIR, OUTPUT_DIR, PROJECT_DIR, request.model_dump())
-    return result
+    return project_manager.export_bundle(INPUT_DIR, OUTPUT_DIR, PROJECT_DIR, request.model_dump())
 
 
 @app.post("/stems")
@@ -339,7 +352,10 @@ def stems():
         raise HTTPException(400, "Сначала загрузите аудиофайл")
     out = SEPARATED_DIR / path.stem
     out.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, "-m", "demucs", "-d", "cuda", "-n", "htdemucs", "-o", str(SEPARATED_DIR), str(path)]
+    device = os.getenv("DEMUCS_DEVICE", "cuda")
+    if device not in {"cuda", "cpu"}:
+        device = "cuda"
+    cmd = [sys.executable, "-m", "demucs", "-d", device, "-n", "htdemucs", "-o", str(SEPARATED_DIR), str(path)]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise HTTPException(500, result.stderr or result.stdout or "Demucs error")
