@@ -19,9 +19,10 @@ from spectral_timeline import spectral_timeline_analyze
 import audio_intelligence
 import master_brain
 
-ENGINE_VERSION = "6.4"
+ENGINE_VERSION = "6.5"
 
 MASTER_PROFILES = {
+    "latest_auto": {"label": "Latest Auto · Adaptive", "factor": 0.92, "target_lufs": -10.5},
     "suno6_commercial": {"label": "Suno 6 · Commercial", "factor": 0.92, "target_lufs": -10.5},
     "suno55_balanced": {"label": "Suno 5.5 · Balanced", "factor": 0.82, "target_lufs": -11.0},
     "clean_streaming": {"label": "Clean Streaming", "factor": 0.68, "target_lufs": -12.0},
@@ -72,6 +73,26 @@ def analyze_file(source: Any) -> dict[str, Any]:
     }
 
 
+def _auto_target(analysis: dict[str, Any], requested: float) -> tuple[float, str]:
+    """Choose a conservative commercial target from dynamics instead of blindly pushing loudness."""
+    adaptive = analysis.get("adaptive_analysis", {})
+    crest = float(adaptive.get("crest_factor_db", 8.0) or 8.0)
+    if crest >= 10.0:
+        target = -11.5
+        reason = "Высокий динамический запас — сохранена динамика."
+    elif crest >= 7.0:
+        target = -10.5
+        reason = "Сбалансированная динамика — выбран коммерческий target."
+    else:
+        target = -10.0
+        reason = "Плотный исходник — target слегка снижен, чтобы не усиливать артефакты."
+    # Respect an explicit non-default target from API callers.
+    if requested < -13.0 or requested > -8.0:
+        target = float(np.clip(requested, -14.0, -8.0))
+        reason = "Использован явно заданный пользователем target LUFS."
+    return round(target, 2), reason
+
+
 def _loudness_score(lufs: float, target: float) -> float:
     error = abs(float(lufs) - float(target))
     return max(0.0, 100.0 - error * 14.0)
@@ -104,37 +125,38 @@ def _candidate_score(qc: dict[str, Any], target_lufs: float) -> float:
     return round(base * 0.68 + loud * 0.20 + peak * 0.12, 2)
 
 
-def _candidate_factors() -> list[float]:
-    """Keep the production service responsive on small Render instances.
-
-    Set MASTER_MAX_CANDIDATES=4 to restore the full optimizer sweep.
-    The default is one candidate centered on the planner's own gain decisions.
-    """
+def _candidate_factors(auto_mode: bool = False) -> list[float]:
+    """Keep normal runs light; adaptive auto gets a small two-pass comparison."""
+    if auto_mode:
+        return [0.75, 1.00]
     try:
         count = int(os.getenv("MASTER_MAX_CANDIDATES", "1"))
     except ValueError:
         count = 1
     count = max(1, min(4, count))
-    profiles = {
-        1: [1.00],
-        2: [0.75, 1.00],
-        3: [0.50, 0.85, 1.00],
-        4: [0.50, 0.75, 1.00, 1.15],
-    }
+    profiles = {1: [1.00], 2: [0.75, 1.00], 3: [0.50, 0.85, 1.00], 4: [0.50, 0.75, 1.00, 1.15]}
     return profiles[count]
 
 
 def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: float = -10.5,
-        ceiling_db: float = -1.0, intensity: str = "balanced", reference: Any = None, profile: str = "suno6_commercial") -> dict[str, Any]:
+        ceiling_db: float = -1.0, intensity: str = "balanced", reference: Any = None,
+        profile: str = "latest_auto") -> dict[str, Any]:
     input_path = _resolve_input(source)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     analysis = analyze_file(input_path)
     base_plan = analysis["processing_plan"]
-    profile_cfg = MASTER_PROFILES.get(profile, MASTER_PROFILES["suno6_commercial"])
+    auto_mode = profile == "latest_auto" or intensity == "auto"
+    profile_cfg = MASTER_PROFILES.get(profile, MASTER_PROFILES["latest_auto"])
+    if auto_mode:
+        target_lufs, auto_reason = _auto_target(analysis, target_lufs)
+        profile_cfg = MASTER_PROFILES["latest_auto"]
+    else:
+        auto_reason = "Ручной профиль мастеринга."
+
     effective_factor = float(profile_cfg["factor"])
-    factors = _candidate_factors()
+    factors = _candidate_factors(auto_mode)
     candidates: list[dict[str, Any]] = []
 
     for factor in factors:
@@ -160,7 +182,9 @@ def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: f
             candidates.append({"name": name, "factor": factor, "score": 0.0,
                                "verdict": "error", "output": None, "error": str(exc)})
 
-    acceptable = [c for c in candidates if c.get("verdict") in {"excellent", "acceptable", "acceptable_with_warnings", "needs_review"} and c.get("score", 0.0) >= 70.0 and not any(g.get("status") == "much_worse" for g in c.get("qc", {}).get("evaluation", {}).get("goals", []))]
+    acceptable = [c for c in candidates if c.get("verdict") in {"excellent", "acceptable", "acceptable_with_warnings", "needs_review"}
+                  and c.get("score", 0.0) >= 70.0
+                  and not any(g.get("status") == "much_worse" for g in c.get("qc", {}).get("evaluation", {}).get("goals", []))]
     acceptable.sort(key=lambda x: x["score"], reverse=True)
     best = acceptable[0] if acceptable else None
 
@@ -203,7 +227,9 @@ def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: f
         "intensity": intensity,
         "master_profile": profile_cfg["label"],
         "profile_id": profile,
-        "profile_note": "Suno-oriented commercial profile; does not reproduce proprietary Suno processing.",
+        "auto_mode": auto_mode,
+        "auto_reason": auto_reason,
+        "profile_note": "Adaptive commercial mastering; the engine evaluates two safe processing strengths in auto mode and keeps the higher-QC result.",
         "selected_candidate": selected,
         "rollback": rollback,
         "candidate_count": len(factors),
