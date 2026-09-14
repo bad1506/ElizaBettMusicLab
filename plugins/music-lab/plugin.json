@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "eliza-bett-music-lab",
+  "description": "Specialized engineering and product skills for Eliza Bett Music Lab: React/Vite, FastAPI, audio, mastering, songwriting, testing and deployment.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Eliza Bett Music Lab"
+  },
+  "skills": "skills/"
+}
