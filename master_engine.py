@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -18,14 +19,13 @@ from spectral_timeline import spectral_timeline_analyze
 import audio_intelligence
 import master_brain
 
-ENGINE_VERSION = "6.3"
+ENGINE_VERSION = "6.4"
 
 MASTER_PROFILES = {
     "suno6_commercial": {"label": "Suno 6 · Commercial", "factor": 0.92, "target_lufs": -10.5},
     "suno55_balanced": {"label": "Suno 5.5 · Balanced", "factor": 0.82, "target_lufs": -11.0},
     "clean_streaming": {"label": "Clean Streaming", "factor": 0.68, "target_lufs": -12.0},
 }
-
 
 
 def _resolve_input(source: Any) -> Path:
@@ -104,6 +104,26 @@ def _candidate_score(qc: dict[str, Any], target_lufs: float) -> float:
     return round(base * 0.68 + loud * 0.20 + peak * 0.12, 2)
 
 
+def _candidate_factors() -> list[float]:
+    """Keep the production service responsive on small Render instances.
+
+    Set MASTER_MAX_CANDIDATES=4 to restore the full optimizer sweep.
+    The default is one candidate centered on the planner's own gain decisions.
+    """
+    try:
+        count = int(os.getenv("MASTER_MAX_CANDIDATES", "1"))
+    except ValueError:
+        count = 1
+    count = max(1, min(4, count))
+    profiles = {
+        1: [1.00],
+        2: [0.75, 1.00],
+        3: [0.50, 0.85, 1.00],
+        4: [0.50, 0.75, 1.00, 1.15],
+    }
+    return profiles[count]
+
+
 def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: float = -10.5,
         ceiling_db: float = -1.0, intensity: str = "balanced", reference: Any = None, profile: str = "suno6_commercial") -> dict[str, Any]:
     input_path = _resolve_input(source)
@@ -114,7 +134,7 @@ def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: f
     base_plan = analysis["processing_plan"]
     profile_cfg = MASTER_PROFILES.get(profile, MASTER_PROFILES["suno6_commercial"])
     effective_factor = float(profile_cfg["factor"])
-    factors = [0.50, 0.75, 1.00, 1.15]
+    factors = _candidate_factors()
     candidates: list[dict[str, Any]] = []
 
     for factor in factors:
@@ -148,11 +168,13 @@ def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: f
     rollback = best is None
     if rollback:
         shutil.copy2(input_path, final_path)
-        final_analysis = mastering.analyze_master(*sf.read(str(final_path), always_2d=True))
+        final_audio, final_sr = sf.read(str(final_path), always_2d=True)
+        final_analysis = mastering.analyze_master(final_audio, final_sr)
         selected = {"name": "rollback_original", "factor": 0.0, "score": 0.0, "verdict": "rollback"}
     else:
         shutil.copy2(best["output"], final_path)
-        final_analysis = mastering.analyze_master(*sf.read(str(final_path), always_2d=True))
+        final_audio, final_sr = sf.read(str(final_path), always_2d=True)
+        final_analysis = mastering.analyze_master(final_audio, final_sr)
         selected = {k: best.get(k) for k in ("name", "factor", "score", "verdict")}
 
     reference_report = None
@@ -184,6 +206,7 @@ def run(source: Any, output_dir: str | Path = "optimizer_output", target_lufs: f
         "profile_note": "Suno-oriented commercial profile; does not reproduce proprietary Suno processing.",
         "selected_candidate": selected,
         "rollback": rollback,
+        "candidate_count": len(factors),
         "analysis": analysis,
         "master_brain": analysis.get("master_brain", {}),
         "candidates": [{k: c.get(k) for k in ("name", "factor", "score", "verdict", "output", "error")} for c in candidates],
