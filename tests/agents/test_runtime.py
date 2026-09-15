@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from agents import router
 from agents.skill_loader import load
@@ -77,7 +78,7 @@ class AgentRuntimeTests(unittest.TestCase):
     def test_invoke_uses_skill_and_provider(self):
         result = router.invoke("songwriting-ai-music", "Сделай короткий припев")
         self.assertTrue(result["ok"])
-        self.assertEqual(result["answer"], "TEST_OK")
+        self.assertEqual(result["answer"], "TEST_TOOL_OK")
         self.assertEqual(result["provider"], "openai")
         self.assertEqual(result["skill"], "songwriting-and-ai-music")
         self.assertTrue(self.fake.calls)
@@ -97,6 +98,28 @@ class AgentRuntimeTests(unittest.TestCase):
         exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
         self.assertEqual(exposed, {"music.analyze_mix", "music.build_advice"})
         self.assertIn("problems", self.fake.last_tool_result)
+
+    @patch("agents.router.current_analysis")
+    def test_tool_enabled_agent_receives_current_analysis(self, current_analysis_mock):
+        current_analysis_mock.return_value = {
+            "status": "ok",
+            "file": "track.wav",
+            "analysis": {"lufs": -9.5, "true_peak_dbfs": -0.8},
+        }
+        result = router.invoke("assistant", "Проверь мой текущий микс")
+        self.assertTrue(result["ok"])
+        prompt = self.fake.calls[-1][1][-1]["content"][0]["text"]
+        self.assertIn("CURRENT USER MUSIC ANALYSIS", prompt)
+        self.assertIn("track.wav", prompt)
+        self.assertIn("-9.5", prompt)
+        current_analysis_mock.assert_called_once()
+
+    @patch("agents.router.current_analysis", return_value=None)
+    def test_missing_audio_does_not_break_tool_agent(self, current_analysis_mock):
+        result = router.invoke("assistant", "Что можешь сделать?")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["answer"], "TEST_TOOL_OK")
+        current_analysis_mock.assert_called_once()
 
     def test_unconfigured_agent_keeps_legacy_provider_path(self):
         result = router.invoke("songwriter", "Напиши хук")
