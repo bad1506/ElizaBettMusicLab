@@ -62,31 +62,26 @@ def auth_history_add(request: FastAPIRequest, activity: ActivityRequest):
     web_auth.add_activity(user["id"], activity.kind, activity.title, activity.detail)
     return {"ok": True}
 
-YANDEX_CHART_URLS = (
-    "https://api.music.yandex.net/landing3/chart/russia",
-    "https://api.music.yandex.net/landing3?blocks=chart",
-)
+YANDEX_CHART_URL = "https://api.music.yandex.net/landing3/chart/russia"
 
-def _fetch_chart(url: str) -> dict:
-    request = Request(url, headers={
+def _fetch_chart() -> dict:
+    request = Request(YANDEX_CHART_URL, headers={
         "Accept": "application/json",
-        "User-Agent": "SonaMusicLab/1.0",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/136 Safari/537.36 SonaMusicLab/1.0",
         "X-Yandex-Music-Device": "os=web; os_version=1; manufacturer=SØNA; model=Web; clid=; device_id=sona; uuid=sona-web",
+        "Referer": "https://music.yandex.ru/",
+        "Origin": "https://music.yandex.ru",
     })
-    with urlopen(request, timeout=12) as response:
+    with urlopen(request, timeout=15) as response:
         if response.status < 200 or response.status >= 300:
             raise RuntimeError(f"upstream status {response.status}")
         return json.loads(response.read())
 
 @app.get("/public/yandex-chart")
 def public_yandex_chart():
-    last_error: Exception | None = None
-    for url in YANDEX_CHART_URLS:
-        try:
-            payload = _fetch_chart(url)
-            return payload
-        except Exception as exc:
-            last_error = exc
-    raise HTTPException(502, "Yandex Music chart is temporarily unavailable") from last_error
+    try:
+        return _fetch_chart()
+    except Exception as exc:
+        raise HTTPException(502, "Yandex Music chart is temporarily unavailable") from exc
 
 __all__ = ["app"]
