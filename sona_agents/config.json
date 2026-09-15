@@ -1,0 +1,44 @@
+{
+  "default_agent": "sona-assistant",
+  "skills_root": ".sona/skills",
+  "agents": {
+    "sona-assistant": {
+      "description": "Основной музыкальный AI-ассистент SØNA.",
+      "default_skill": "assistant",
+      "skills": ["assistant", "songwriter", "audio-analysis", "mastering", "trends", "analytics", "finance", "projects", "release-marketing"]
+    },
+    "sona-prompt-engineer": {
+      "description": "Агент для улучшения и построения промптов.",
+      "default_skill": "music-prompt-engineering",
+      "skills": ["music-prompt-engineering"]
+    }
+  },
+  "sources": {
+    "openclaw": {
+      "type": "agentskills",
+      "repository": "openclaw/openclaw",
+      "policy": "vendor-selected-skills"
+    },
+    "hermes": {
+      "type": "agentskills",
+      "repository": "NousResearch/hermes-agent",
+      "policy": "vendor-selected-skills"
+    },
+    "prompts-chat": {
+      "type": "prompt-catalog",
+      "repository": "f/prompts.chat",
+      "api": "https://prompts.chat/api/prompts",
+      "enabled": true
+    }
+  },
+  "routing": {
+    "songwriter": ["песня", "трек", "припев", "куплет", "хук", "лирика", "текст песни"],
+    "audio-analysis": ["анализ аудио", "lufs", "true peak", "микс", "спектр", "динамика"],
+    "mastering": ["мастеринг", "мастер", "лимитер", "ceiling", "громкость"],
+    "trends": ["тренд", "чарт", "вираль", "tiktok", "reels", "тренды"],
+    "release-marketing": ["релиз", "продвижение", "контент-план", "smm", "посев", "пресс-релиз"],
+    "projects": ["проект", "задача", "дедлайн", "релизный план"],
+    "finance": ["доход", "финансы", "бюджет", "роялти"],
+    "analytics": ["аналитика", "прослушивания", "статистика", "метрики"]
+  }
+}
