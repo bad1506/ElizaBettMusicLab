@@ -31,14 +31,20 @@ def _safe_name(name: str) -> str:
     return value[:100] or "assistant"
 
 
+def _external_candidates(safe: str) -> list[Path]:
+    """Поддерживает и плоскую, и сгруппированную структуру external skills."""
+    candidates = [EXTERNAL_SKILLS / safe / "SKILL.md"]
+    if EXTERNAL_SKILLS.is_dir():
+        for path in EXTERNAL_SKILLS.glob(f"*/{safe}/SKILL.md"):
+            candidates.append(path)
+    return candidates
+
+
 @lru_cache(maxsize=128)
 def load(name: str) -> dict[str, Any]:
-    """Загружает локальный SØNA skill или совместимый SKILL.md."""
+    """Загружает локальный SØNA skill или совместимый AgentSkills SKILL.md."""
     safe = _safe_name(name)
-    candidates = [
-        LOCAL_SKILLS / f"{safe}.md",
-        EXTERNAL_SKILLS / safe / "SKILL.md",
-    ]
+    candidates = [LOCAL_SKILLS / f"{safe}.md", *_external_candidates(safe)]
 
     for path in candidates:
         if not path.is_file():
