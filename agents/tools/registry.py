@@ -7,6 +7,7 @@ from .base import ToolError, ToolSpec
 from .music import (
     analyze_mix,
     build_mix_advice,
+    diagnose_vocal_section,
     get_current_intelligence,
     get_current_melody_map,
     get_current_music_analysis,
@@ -54,6 +55,20 @@ _TOOLS = {
         "music.get_current_melody_map",
         "Получает оценочную melody map текущего трека для анализа мелодии и вокальной линии; только чтение.",
         get_current_melody_map,
+    ),
+    "music.diagnose_vocal_in_section": ToolSpec(
+        name="music.diagnose_vocal_in_section",
+        description="Диагностирует, почему вокал может теряться в конкретном участке трека, сопоставляя spectral, stereo, loudness, transients и vocal events. Только чтение.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "section_start_sec": {"type": "number", "minimum": 0},
+                "section_end_sec": {"type": "number", "exclusiveMinimum": 0},
+            },
+            "required": ["section_start_sec", "section_end_sec"],
+            "additionalProperties": False,
+        },
+        handler=diagnose_vocal_section,
     ),
     "music.analyze_mix": ToolSpec(
         name="music.analyze_mix",
