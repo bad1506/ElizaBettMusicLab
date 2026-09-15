@@ -1,9 +1,11 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './glass-interactions.css'
 import './SonaAssistantChat.css'
+import './SonaSferoomChat.css'
 import SonaPublic from './SonaPublic.tsx'
+import SonaSferoomChat from './SonaSferoomChat.tsx'
 
 type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?: (color: string) => void; setBackgroundColor?: (color: string) => void; initData?: string; initDataUnsafe?: { user?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } } }
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
@@ -27,4 +29,20 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 if (initData) {
   originalFetch(`${api}/auth/telegram`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData }) }).then(async r => r.ok ? r.json() : null).then(data => { if (data?.authenticated && data?.user) { sessionStorage.setItem('sova_telegram_user', JSON.stringify(data.user)); window.dispatchEvent(new CustomEvent('sova:telegram-auth', { detail: data.user })) } }).catch(() => undefined)
 }
-createRoot(document.getElementById('root')!).render(<StrictMode><SonaPublic /></StrictMode>)
+function CursorGlow() {
+  useEffect(() => {
+    const root = document.documentElement
+    let raf = 0
+    const move = (event: PointerEvent) => {
+      if (raf) cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        root.style.setProperty('--sona-cursor-x', `${event.clientX}px`)
+        root.style.setProperty('--sona-cursor-y', `${event.clientY}px`)
+      })
+    }
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => { window.removeEventListener('pointermove', move); if (raf) cancelAnimationFrame(raf) }
+  }, [])
+  return null
+}
+createRoot(document.getElementById('root')!).render(<StrictMode><><CursorGlow /><SonaPublic /><SonaSferoomChat /></></StrictMode>)
