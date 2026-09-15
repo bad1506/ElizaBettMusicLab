@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "agents": {
     "assistant": {
       "name": "SØNA Assistant",
@@ -8,6 +8,7 @@
       "provider": "openai",
       "enabled": true,
       "source": "local",
+      "tools": ["music.analyze_mix", "music.build_advice"],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
