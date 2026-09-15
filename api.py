@@ -8,6 +8,8 @@ import chat_api
 import web_auth
 import yandex_public
 from agents.router import AgentError, invoke as invoke_agent, list_agents
+from agents.tools import execute_tool, list_tools
+from agents.tools.base import ToolError
 import security
 
 # The web application is the primary client. Telegram remains optional.
@@ -31,6 +33,10 @@ class AgentRequest(BaseModel):
     message: str = Field(min_length=1, max_length=12000)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=30)
     context: dict = Field(default_factory=dict)
+
+class ToolRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    arguments: dict = Field(default_factory=dict)
 
 
 def _token(request: FastAPIRequest) -> str:
@@ -89,6 +95,19 @@ def auth_history_add(request: FastAPIRequest, activity: ActivityRequest):
 def agents_catalog():
     """Каталог доступен клиенту; выполнение agent требует обычной авторизации middleware."""
     return {"ok": True, "agents": list_agents()}
+
+@app.get("/agents/tools")
+def agents_tools_catalog():
+    """Публичное описание разрешённых tools; сами инструменты защищены middleware."""
+    return {"ok": True, "tools": list_tools()}
+
+@app.post("/agents/tools/invoke")
+def agents_tool_invoke(request: ToolRequest):
+    """Выполняет только whitelisted tool; произвольный Python-код здесь невозможен."""
+    try:
+        return {"ok": True, "tool": request.name, "result": execute_tool(request.name, request.arguments)}
+    except ToolError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 @app.post("/agents/invoke")
 def agents_invoke(request: AgentRequest):
