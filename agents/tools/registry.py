@@ -20,6 +20,7 @@ _TOOLS = {
                 "decisions": {"type": "array", "items": {"type": "object"}},
                 "master_report": {"type": "object"},
             },
+            "required": ["analysis", "decisions", "master_report"],
             "additionalProperties": False,
         },
         handler=analyze_mix,
@@ -34,6 +35,7 @@ _TOOLS = {
                 "decisions": {"type": "array", "items": {"type": "object"}},
                 "master_report": {"type": "object"},
             },
+            "required": ["analysis", "decisions", "master_report"],
             "additionalProperties": False,
         },
         handler=build_mix_advice,
@@ -44,6 +46,26 @@ _TOOLS = {
 def list_tools() -> list[dict[str, Any]]:
     """Публичный каталог инструментов без внутренних обработчиков."""
     return [spec.public() for spec in _TOOLS.values()]
+
+
+def get_tool_specs(names: list[str]) -> list[dict[str, Any]]:
+    """Преобразует allowlist runtime-инструментов в Responses API schemas."""
+    result = []
+    for name in names:
+        spec = _TOOLS.get(name)
+        if spec is None:
+            raise ToolError(f"Unknown configured tool: {name}")
+        public = spec.public()
+        result.append(
+            {
+                "type": "function",
+                "name": public["name"],
+                "description": public["description"],
+                "parameters": public["input"],
+                "strict": True,
+            }
+        )
+    return result
 
 
 def execute_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
