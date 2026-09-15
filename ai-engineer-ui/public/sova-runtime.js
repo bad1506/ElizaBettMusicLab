@@ -3,6 +3,7 @@
     ["Eliza Bett Music Lab", "SØNA"],
     ["Eliza Bett\nMusic Lab", "SØNA"],
     ["Eliza Bett", "SØNA"],
+    ["SØVA", "SØNA"],
   ]);
   const normalize = (root) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
