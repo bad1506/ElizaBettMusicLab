@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from api_secure import app
+import chat_api
 import web_auth
 
 YANDEX_CHART_URLS = (
@@ -71,5 +72,7 @@ def login_account(request: WebAuthRequest):
     except ValueError as exc:
         raise HTTPException(401, str(exc)) from exc
 
+
+chat_api.register(app)
 
 __all__ = ["app"]
