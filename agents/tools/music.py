@@ -4,6 +4,7 @@ from typing import Any
 
 import ai_assistant
 
+from ..music_context import current_analysis
 from .base import ToolError
 
 
@@ -13,6 +14,17 @@ def _dict(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ToolError(f"{field} must be an object")
     return value
+
+
+def get_current_music_analysis() -> dict[str, Any]:
+    """Возвращает актуальный read-only /analysis последнего аудио текущего пользователя."""
+    result = current_analysis()
+    if result is None:
+        return {
+            "status": "no_audio",
+            "message": "У текущего пользователя нет доступного аудиофайла для анализа.",
+        }
+    return result
 
 
 def analyze_mix(*, analysis: dict[str, Any] | None = None, decisions: list[dict[str, Any]] | None = None, master_report: dict[str, Any] | None = None) -> dict[str, Any]:
