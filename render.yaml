@@ -11,3 +11,9 @@ services:
         value: https://eliza-bett-music-lab.vercel.app
       - key: DEMUCS_DEVICE
         value: cpu
+      - key: SONA_DATA_DIR
+        value: /var/data/sona
+    disk:
+      name: sona-data
+      mountPath: /var/data
+      sizeGB: 10
