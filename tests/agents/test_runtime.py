@@ -47,6 +47,8 @@ class AgentRuntimeTests(unittest.TestCase):
         agents = router.list_agents()
         for name in ("assistant", "songwriter", "songwriting-ai-music", "skill-creator"):
             self.assertIn(name, agents)
+        self.assertTrue(agents["skill-creator"]["enabled"])
+        self.assertEqual(agents["skill-creator"]["source"], "openclaw")
         for agent_name, spec in agents.items():
             skill = load(spec["skill"])
             self.assertNotEqual(skill["source"], "missing", agent_name)
@@ -65,8 +67,8 @@ class AgentRuntimeTests(unittest.TestCase):
         exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
         self.assertEqual(exposed, {
             "music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence",
-            "music.get_current_vocal_context", "music.get_current_melody_map", "music.diagnose_vocal_in_section",
-            "music.analyze_mix", "music.build_advice",
+            "music.get_current_vocal_context", "music.get_current_melody_map", "music.get_current_intelligence_report",
+            "music.diagnose_vocal_in_section", "music.analyze_mix", "music.build_advice",
         })
 
     @patch("agents.tools.music.current_analysis")
@@ -82,11 +84,48 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["status"], "no_audio")
         mocked.assert_called_once()
 
+    @patch("agents.tools.music.current_music_intelligence", return_value={"status": "no_audio", "message": "У текущего пользователя нет доступного аудиофайла для анализа."})
+    def test_unified_intelligence_report_no_audio(self, mocked):
+        result = execute_tool("music.get_current_intelligence_report", {})
+        self.assertEqual(result["status"], "no_audio")
+        mocked.assert_called_once_with()
+
+    @patch("agents.tools.registry.current_music_intelligence")
+    def test_unified_intelligence_report_registered(self, mocked):
+        mocked.return_value = {"status": "ok", "file": "track.wav", "technical": {"bpm": 120}, "structure": {"section_count": 2}, "issues": [], "priority_order": []}
+        spec = get_tool_specs(["music.get_current_intelligence_report"])[0]
+        self.assertEqual(spec["parameters"]["required"], [])
+        result = execute_tool("music.get_current_intelligence_report", {})
+        self.assertEqual(result["technical"]["bpm"], 120)
+        mocked.assert_called_once_with()
+
+    @patch("agents.music_context.current_melody_map", return_value={"status": "ok", "file": "track.wav", "melody_map": {"events": []}})
+    @patch("agents.music_context.current_timeline", return_value={"status": "ok", "file": "track.wav", "loudness": {"segments": []}})
+    @patch("agents.music_context.current_intelligence", return_value={"status": "ok", "file": "track.wav", "spectral": {}, "stereo": {}, "transients": {}, "vocal_events": {}})
+    @patch("agents.music_context.current_vocal_context", return_value={"status": "ok", "file": "track.wav", "audio_context": {"duration": 180, "tempo": {"bpm": 124}, "key": {"name": "A minor"}, "sections": [{"index": 1, "start": 0, "end": 30, "role_hint": "verse", "energy_db_relative": 0}]}})
+    @patch("agents.music_context.current_analysis", return_value={"status": "ok", "file": "track.wav", "analysis": {"decisions": [{"issue": "masking", "severity": "high", "recommendation": "Сделать dynamic EQ"}], "processing_plan": []}})
+    def test_unified_intelligence_report_composes_snapshot(self, analysis_mock, vocal_mock, intelligence_mock, timeline_mock, melody_mock):
+        from agents.music_context import current_music_intelligence
+        result = current_music_intelligence()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["file"], "track.wav")
+        self.assertEqual(result["technical"]["duration_sec"], 180.0)
+        self.assertEqual(result["technical"]["bpm"], 124.0)
+        self.assertEqual(result["technical"]["key"], "A minor")
+        self.assertEqual(result["structure"]["section_count"], 1)
+        self.assertEqual(result["issues"][0]["severity"], "high")
+        self.assertEqual(result["priority_order"], ["Сделать dynamic EQ"])
+        analysis_mock.assert_called_once()
+        vocal_mock.assert_called_once()
+        intelligence_mock.assert_called_once()
+        timeline_mock.assert_called_once()
+        melody_mock.assert_called_once()
+
     def test_specialized_tools_registered(self):
         names = {item["name"] for item in list_tools()}
         self.assertTrue({
             "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context",
-            "music.get_current_melody_map", "music.diagnose_vocal_in_section",
+            "music.get_current_melody_map", "music.diagnose_vocal_in_section", "music.get_current_intelligence_report",
         }.issubset(names))
 
     @patch("agents.tools.music.current_vocal_context")
