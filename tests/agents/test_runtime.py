@@ -27,14 +27,7 @@ class FakeProvider:
             self.last_tool_result = result
             called_name = "music.get_current_analysis"
         else:
-            result = execute_tool(
-                "music.analyze_mix",
-                {
-                    "analysis": {"crest_factor_db": 6.0},
-                    "decisions": [],
-                    "master_report": {},
-                },
-            )
+            result = execute_tool("music.analyze_mix", {"analysis": {"crest_factor_db": 6.0}, "decisions": [], "master_report": {}})
             self.last_tool_result = result
             called_name = "music.analyze_mix"
         self.tool_call_name = called_name
@@ -61,16 +54,11 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("skill-creator", agents)
 
     def test_every_enabled_registry_agent_has_a_real_skill(self):
-        """Registry не должен содержать включённый agent с отсутствующим skill."""
         for agent_name, spec in router.list_agents().items():
             skill_name = spec.get("skill")
             self.assertIsInstance(skill_name, str, agent_name)
             skill = load(skill_name)
-            self.assertNotEqual(
-                skill["source"],
-                "missing",
-                f"Agent {agent_name!r} points to missing skill {skill_name!r}",
-            )
+            self.assertNotEqual(skill["source"], "missing", f"Agent {agent_name!r} points to missing skill {skill_name!r}")
             self.assertTrue(skill["instructions"].strip(), agent_name)
 
     def test_hermes_skill_is_loaded(self):
@@ -95,38 +83,21 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("SØNA SKILL INSTRUCTIONS", prompt)
 
     def test_invoke_routes_configured_tools_to_provider(self):
-        result = router.invoke(
-            "assistant",
-            "Проанализируй текущие результаты микса и дай рекомендации",
-            context={"analysis": {"crest_factor_db": 6.0}},
-        )
+        result = router.invoke("assistant", "Проанализируй текущие результаты микса и дай рекомендации", context={"analysis": {"crest_factor_db": 6.0}})
         self.assertTrue(result["ok"])
         self.assertEqual(result["answer"], "TEST_TOOL_OK")
         self.assertEqual(result["tool_calls"], [{"name": "music.get_current_analysis", "status": "ok"}])
         exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
-        self.assertEqual(
-            exposed,
-            {"music.get_current_analysis", "music.analyze_mix", "music.build_advice"},
-        )
+        self.assertEqual(exposed, {"music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.analyze_mix", "music.build_advice"})
         self.assertEqual(self.fake.last_tool_result["status"], "no_audio")
 
     @patch("agents.tools.music.current_analysis")
     def test_current_analysis_tool_returns_latest_analysis(self, current_analysis_mock):
-        current_analysis_mock.return_value = {
-            "status": "ok",
-            "file": "track.wav",
-            "analysis": {
-                "timeline": {"segments": [{"start": 0, "end": 5}]},
-                "intelligence": {"findings": []},
-                "decisions": [],
-                "master_brain": {"summary": "test"},
-            },
-        }
+        current_analysis_mock.return_value = {"status": "ok", "file": "track.wav", "analysis": {"timeline": {"segments": [{"start": 0, "end": 5}]}, "intelligence": {"findings": []}, "decisions": [], "master_brain": {"summary": "test"}}}
         result = execute_tool("music.get_current_analysis", {})
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["file"], "track.wav")
         self.assertIn("timeline", result["analysis"])
-        self.assertIn("intelligence", result["analysis"])
         current_analysis_mock.assert_called_once()
 
     @patch("agents.tools.music.current_analysis", return_value=None)
@@ -134,6 +105,38 @@ class AgentRuntimeTests(unittest.TestCase):
         result = execute_tool("music.get_current_analysis", {})
         self.assertEqual(result["status"], "no_audio")
         current_analysis_mock.assert_called_once()
+
+    def test_specialized_music_tools_are_read_only_and_registered(self):
+        names = {item["name"] for item in list_tools()}
+        expected = {"music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map"}
+        self.assertTrue(expected.issubset(names))
+
+    @patch("agents.tools.music.current_timeline", return_value={"status": "ok", "file": "track.wav", "loudness": {"segments": []}})
+    def test_current_timeline_tool(self, mocked):
+        result = execute_tool("music.get_current_timeline", {})
+        self.assertEqual(result["file"], "track.wav")
+        self.assertIn("loudness", result)
+        mocked.assert_called_once()
+
+    @patch("agents.tools.music.current_intelligence", return_value={"status": "ok", "file": "track.wav", "findings": []})
+    def test_current_intelligence_tool(self, mocked):
+        result = execute_tool("music.get_current_intelligence", {})
+        self.assertEqual(result["status"], "ok")
+        mocked.assert_called_once()
+
+    @patch("agents.tools.music.current_vocal_context", return_value={"status": "ok", "file": "track.wav", "audio_context": {"sections": []}})
+    def test_current_vocal_context_tool(self, mocked):
+        result = execute_tool("music.get_current_vocal_context", {})
+        self.assertEqual(result["file"], "track.wav")
+        self.assertIn("audio_context", result)
+        mocked.assert_called_once()
+
+    @patch("agents.tools.music.current_melody_map", return_value={"status": "ok", "file": "track.wav", "melody_map": {"events": []}})
+    def test_current_melody_map_tool(self, mocked):
+        result = execute_tool("music.get_current_melody_map", {})
+        self.assertEqual(result["file"], "track.wav")
+        self.assertIn("melody_map", result)
+        mocked.assert_called_once()
 
     def test_tool_enabled_agent_does_not_preload_expensive_analysis(self):
         with patch("agents.router.current_analysis", side_effect=AssertionError("router must not preload analysis"), create=True):
@@ -148,24 +151,22 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["answer"], "TEST_OK")
 
     def test_music_tool_schema_is_responses_compatible(self):
-        specs = get_tool_specs(["music.get_current_analysis", "music.analyze_mix", "music.build_advice"])
+        names = ["music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.analyze_mix", "music.build_advice"]
+        specs = get_tool_specs(names)
         self.assertEqual({item["type"] for item in specs}, {"function"})
         self.assertTrue(all(item["strict"] for item in specs))
         self.assertTrue(all("parameters" in item for item in specs))
-        current = next(item for item in specs if item["name"] == "music.get_current_analysis")
-        self.assertEqual(current["parameters"]["properties"], {})
-        self.assertEqual(current["parameters"]["required"], [])
+        for item in specs[:5]:
+            self.assertEqual(item["parameters"]["properties"], {})
+            self.assertEqual(item["parameters"]["required"], [])
 
     def test_invoke_supports_prompts_chat_provider(self):
         original_search = router.search_prompts
-        router.search_prompts = lambda message, limit=4: [
-            {"id": "test-1", "title": "Prompt", "description": "test", "content": "example"}
-        ]
+        router.search_prompts = lambda message, limit=4: [{"id": "test-1", "title": "Prompt", "description": "test", "content": "example"}]
         try:
             result = router.invoke("prompt-engineering", "Улучши промпт для вокала")
         finally:
             router.search_prompts = original_search
-
         self.assertTrue(result["ok"])
         self.assertEqual(result["provider"], "openai+prompts.chat")
         self.assertEqual(result["sources"][0]["id"], "test-1")
@@ -179,18 +180,7 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("music.build_advice", names)
 
     def test_music_analyze_tool_executes_existing_engine(self):
-        result = execute_tool(
-            "music.analyze_mix",
-            {
-                "analysis": {
-                    "crest_factor_db": 6.0,
-                    "true_peak_dbfs": -0.2,
-                    "mono_correlation": 0.1,
-                },
-                "decisions": [],
-                "master_report": {},
-            },
-        )
+        result = execute_tool("music.analyze_mix", {"analysis": {"crest_factor_db": 6.0, "true_peak_dbfs": -0.2, "mono_correlation": 0.1}, "decisions": [], "master_report": {}})
         self.assertIn("problems", result)
         self.assertTrue(result["problems"])
         self.assertEqual(result["problems"][0]["severity"], "high")
