@@ -15,7 +15,7 @@ import telegram_auth
 import web_auth
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart"}
+_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart", "/sona-chat"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock()
 _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
@@ -62,7 +62,11 @@ def security_middleware(app):
             response.headers.setdefault("X-Content-Type-Options", "nosniff")
             return response
 
-        if path not in _PUBLIC_PATHS:
+        if path == "/sona-chat":
+            host = request.client.host if request.client else "unknown"
+            if not _rate_limit(f"chat-ip:{host}", 20):
+                return JSONResponse({"detail": "Слишком много сообщений. Попробуйте через минуту."}, status_code=429, headers={"Retry-After": "60"})
+        elif path not in _PUBLIC_PATHS:
             init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
             web_token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "false").lower() == "true"
