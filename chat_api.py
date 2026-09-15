@@ -51,7 +51,7 @@ class ChatRequest(BaseModel):
 
 
 def register(app):
-    @app.post("/chat")
+    @app.post("/sona-chat")
     def chat(request: ChatRequest):
         history = request.history[-20:]
         conversation = []
