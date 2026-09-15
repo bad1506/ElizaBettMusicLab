@@ -31,13 +31,15 @@ if (initData) {
 }
 function CursorGlow() {
   useEffect(() => {
-    const root = document.documentElement
     let raf = 0
     const move = (event: PointerEvent) => {
       if (raf) cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
-        root.style.setProperty('--sona-cursor-x', `${event.clientX}px`)
-        root.style.setProperty('--sona-cursor-y', `${event.clientY}px`)
+        document.querySelectorAll<HTMLElement>('.sona-sferoom-panel').forEach((panel) => {
+          const rect = panel.getBoundingClientRect()
+          panel.style.setProperty('--mx', `${event.clientX - rect.left}px`)
+          panel.style.setProperty('--my', `${event.clientY - rect.top}px`)
+        })
       })
     }
     window.addEventListener('pointermove', move, { passive: true })
