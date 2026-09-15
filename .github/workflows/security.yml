@@ -36,17 +36,18 @@ jobs:
       - run: pip install bandit pip-audit
       - run: bandit -q -lll -r . -x .venv,ai-engineer-ui/node_modules
       - run: pip-audit -r requirements.txt
+      - run: python tests/security_contract.py
 
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: python,javascript-typescript
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/analyze@v4
 
   frontend-audit:
     runs-on: ubuntu-latest

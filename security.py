@@ -56,7 +56,6 @@ def security_middleware(app):
         path = request.url.path
         token = None
 
-        # CORS preflight carries no Telegram credentials; let CORSMiddleware handle it.
         if request.method == "OPTIONS":
             response = await call_next(request)
             response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -64,7 +63,9 @@ def security_middleware(app):
 
         if path not in _PUBLIC_PATHS:
             init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
-            allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "true").lower() == "true"
+            # Local unauthenticated mode is opt-in for development only.
+            # Production defaults to strict Telegram authentication.
+            allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "false").lower() == "true"
             if not init_data and not (allow_local and is_local_request(request)):
                 return JSONResponse({"detail": "Telegram authentication required"}, status_code=401)
             if init_data:
