@@ -1,5 +1,3 @@
-from __future__
-
 import os
 import subprocess
 import sys
@@ -30,13 +28,7 @@ import vocal_intelligence
 BASE = Path(__file__).resolve().parent
 APP_VERSION = "12.0.0"
 ENABLE_DOCS = os.getenv("ENABLE_API_DOCS", "false").lower() == "true"
-app = FastAPI(
-    title="Eliza Bett Music Lab AI Engineer",
-    version=APP_VERSION,
-    docs_url="/docs" if ENABLE_DOCS else None,
-    redoc_url="/redoc" if ENABLE_DOCS else None,
-    openapi_url="/openapi.json" if ENABLE_DOCS else None,
-)
+app = FastAPI(title="Eliza Bett Music Lab AI Engineer", version=APP_VERSION, docs_url="/docs" if ENABLE_DOCS else None, redoc_url="/redoc" if ENABLE_DOCS else None, openapi_url="/openapi.json" if ENABLE_DOCS else None)
 
 
 def _cors_origins() -> list[str]:
@@ -45,13 +37,7 @@ def _cors_origins() -> list[str]:
     return [origin.strip() for origin in configured.split(",") if origin.strip()] or defaults
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins(),
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Telegram-Init-Data"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-Telegram-Init-Data"])
 security.security_middleware(app)
 
 AUDIO_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".ogg"}
@@ -102,11 +88,7 @@ def auth_telegram(request: TelegramAuthRequest):
     except telegram_auth.TelegramAuthError:
         raise HTTPException(401, "Invalid or expired Telegram authentication")
     user = data.get("user") or {}
-    return {"ok": True, "authenticated": True, "user": {
-        "id": user.get("id"), "first_name": user.get("first_name", ""),
-        "last_name": user.get("last_name", ""), "username": user.get("username", ""),
-        "language_code": user.get("language_code", ""), "photo_url": user.get("photo_url", ""),
-    }, "auth_date": data.get("auth_date"), "start_param": data.get("start_param")}
+    return {"ok": True, "authenticated": True, "user": {"id": user.get("id"), "first_name": user.get("first_name", ""), "last_name": user.get("last_name", ""), "username": user.get("username", ""), "language_code": user.get("language_code", ""), "photo_url": user.get("photo_url", "")}, "auth_date": data.get("auth_date"), "start_param": data.get("start_param")}
 
 
 async def _save_audio(file: UploadFile, folder: Path, default_name: str) -> Path:
