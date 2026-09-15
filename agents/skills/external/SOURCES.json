@@ -1,0 +1,19 @@
+{
+  "openclaw": {
+    "repository": "openclaw/openclaw",
+    "commit": "8326552c19d1eed7ac8b41471db582a1f8eb0d38",
+    "format": "AgentSkills/SKILL.md",
+    "notes": "Do not install the full OpenClaw runtime into SØNA; vendor only selected skill documents."
+  },
+  "hermes": {
+    "repository": "NousResearch/hermes-agent",
+    "commit": "24fd22b94df040d843eb280ff197a4bcd99a6fc3",
+    "format": "SKILL.md",
+    "notes": "Hermes skills are instruction documents; tool-heavy skills require their own runtime and must not be auto-enabled."
+  },
+  "prompts_chat": {
+    "endpoint": "https://prompts.chat/api/prompts",
+    "format": "REST",
+    "notes": "Public prompt search is used as optional context; private/save operations require PROMPTS_API_KEY."
+  }
+}
