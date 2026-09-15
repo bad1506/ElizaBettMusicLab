@@ -2,5 +2,11 @@
   "buildCommand": "cd ai-engineer-ui && npm run build",
   "outputDirectory": "ai-engineer-ui/dist",
   "installCommand": "cd ai-engineer-ui && npm install",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://elizabettmusiclab-1.onrender.com/:path*"
+    }
+  ]
 }
