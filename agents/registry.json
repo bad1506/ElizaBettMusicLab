@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "agents": {
     "assistant": {
       "name": "SØNA Assistant",
@@ -8,7 +8,7 @@
       "provider": "openai",
       "enabled": true,
       "source": "local",
-      "tools": ["music.analyze_mix", "music.build_advice"],
+      "tools": ["music.get_current_analysis", "music.analyze_mix", "music.build_advice"],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
@@ -19,7 +19,7 @@
       "provider": "openai",
       "enabled": true,
       "source": "local",
-      "tools": ["music.analyze_mix", "music.build_advice"],
+      "tools": ["music.get_current_analysis", "music.analyze_mix", "music.build_advice"],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
@@ -30,7 +30,7 @@
       "provider": "openai",
       "enabled": true,
       "source": "hermes-agent",
-      "tools": ["music.analyze_mix", "music.build_advice"],
+      "tools": ["music.get_current_analysis", "music.analyze_mix", "music.build_advice"],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
