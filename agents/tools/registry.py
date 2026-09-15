@@ -33,7 +33,13 @@ _MIX_INPUT = {
 
 def current_music_intelligence() -> dict[str, Any]:
     """Прокси для unified report; делегирует модулю music_context."""
-    return music_tools.current_music_intelligence()
+    from ..music_context import current_music_intelligence as build_report
+    return build_report()
+
+
+# Compatibility alias: existing callers/tests may patch agents.tools.music.current_music_intelligence.
+if not hasattr(music_tools, "current_music_intelligence"):
+    setattr(music_tools, "current_music_intelligence", current_music_intelligence)
 
 
 def _tool(name: str, description: str, handler) -> ToolSpec:
