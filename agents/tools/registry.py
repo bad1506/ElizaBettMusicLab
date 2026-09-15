@@ -19,6 +19,16 @@ from .music import (
 LOGGER = logging.getLogger("sona.agents.tools")
 
 _EMPTY_INPUT = {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
+_MIX_INPUT = {
+    "type": "object",
+    "properties": {
+        "analysis": {"type": "object"},
+        "decisions": {"type": "array", "items": {"type": "object"}},
+        "master_report": {"type": "object"},
+    },
+    "required": ["analysis", "decisions", "master_report"],
+    "additionalProperties": False,
+}
 
 
 def _tool(name: str, description: str, handler) -> ToolSpec:
@@ -33,8 +43,8 @@ _TOOLS = {
     "music.get_current_melody_map": _tool("music.get_current_melody_map", "Получает оценочную melody map текущего трека; только чтение.", get_current_melody_map),
     "music.get_current_intelligence_report": _tool("music.get_current_intelligence_report", "Собирает единый read-only Music Intelligence отчёт: BPM, тональность, структуру, вокал, melody, loudness, spectral/stereo intelligence, engine decisions и приоритеты.", current_music_intelligence),
     "music.diagnose_vocal_in_section": ToolSpec(name="music.diagnose_vocal_in_section", description="Диагностирует, почему вокал может теряться в секции. Если время не задано, автоматически выбирает вероятный chorus/drop или секцию по section_name.", input_schema={"type": "object", "properties": {"section_start_sec": {"type": "number", "minimum": 0}, "section_end_sec": {"type": "number", "exclusiveMinimum": 0}, "section_name": {"type": "string", "minLength": 1, "maxLength": 40}}, "required": [], "additionalProperties": False}, handler=diagnose_vocal_section),
-    "music.analyze_mix": ToolSpec(name="music.analyze_mix", description="Структурирует результаты анализа микса, проблемы и приоритеты обработки.", input_schema={"type": "object", "properties": {"analysis": {"type": "object"}, "decisions": {"type": "array", "items": {"type": "object"}}, "master_report": {"type": "object"}}, "required": ["analysis", "decisions", "master_report"], "additionalProperties": False}, handler=analyze_mix),
-    "music.build_advice": ToolSpec(name="music.build_advice", description="Формирует локальные рекомендации по миксу без вызова LLM.", input_schema={"type": "object", "properties": {"analysis": {"type": "object"}, "decisions": {"type": "array", "items": {"type": "object"}}, "master_report": {"type": "object"}, "required": ["analysis", "decisions", "master_report"], "additionalProperties": False}, handler=build_mix_advice),
+    "music.analyze_mix": ToolSpec(name="music.analyze_mix", description="Структурирует результаты анализа микса, проблемы и приоритеты обработки.", input_schema=_MIX_INPUT, handler=analyze_mix),
+    "music.build_advice": ToolSpec(name="music.build_advice", description="Формирует локальные рекомендации по миксу без вызова LLM.", input_schema=_MIX_INPUT, handler=build_mix_advice),
 }
 
 
