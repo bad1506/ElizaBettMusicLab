@@ -1,0 +1,86 @@
+/* SØNA Assistant — popup layer. Deliberately self-contained so page styles cannot turn it into an inline footer block. */
+.sona-assistant,
+#root .sona-assistant,
+.sona-app .sona-assistant {
+  position: fixed !important;
+  inset: auto 24px 24px auto !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 2147483647 !important;
+  display: block !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+.sona-assistant > * { pointer-events: auto !important; }
+.sona-chat-trigger {
+  position: fixed !important;
+  right: 24px !important;
+  bottom: 24px !important;
+  z-index: 2147483647 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 132px !important;
+  height: 52px !important;
+  padding: 0 18px !important;
+  border: 1px solid rgba(255,255,255,.82) !important;
+  border-radius: 999px !important;
+  background: rgba(18,19,24,.94) !important;
+  color: #fff !important;
+  box-shadow: 0 18px 55px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.18) !important;
+  font: 600 14px/1 system-ui, sans-serif !important;
+}
+.sona-chat-panel {
+  position: fixed !important;
+  right: 24px !important;
+  bottom: 24px !important;
+  left: auto !important;
+  top: auto !important;
+  z-index: 2147483647 !important;
+  width: min(410px, calc(100vw - 32px)) !important;
+  height: min(650px, calc(100vh - 48px)) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 28px !important;
+  background: rgba(18,19,24,.97) !important;
+  color: #f7f7f8 !important;
+  box-shadow: 0 35px 110px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.12) !important;
+  backdrop-filter: blur(30px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(135%) !important;
+  animation: sona-popup-in .28s cubic-bezier(.22,1,.36,1) !important;
+}
+.sona-chat-panel::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 10 !important;
+  pointer-events: none !important;
+  border-radius: 28px !important;
+  padding: 1px !important;
+  background: linear-gradient(120deg, rgba(255,255,255,.3), rgba(181,139,255,.95), rgba(73,212,255,.85), rgba(255,105,205,.85), rgba(255,255,255,.2)) !important;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+  -webkit-mask-composite: xor !important;
+  mask-composite: exclude !important;
+  animation: sona-popup-beam 6s linear infinite !important;
+}
+.sona-chat-header,
+.sona-chat-messages,
+.sona-chat-composer,
+.sona-chat-hint { position: relative !important; z-index: 2 !important; }
+.sona-chat-header { flex: 0 0 auto !important; }
+.sona-chat-messages { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; }
+.sona-chat-composer { flex: 0 0 auto !important; }
+@keyframes sona-popup-in { from { opacity: 0; transform: translateY(18px) scale(.94) !important; } to { opacity: 1; transform: translateY(0) scale(1) !important; } }
+@keyframes sona-popup-beam { 0% { filter: hue-rotate(0deg); opacity: .7; } 50% { filter: hue-rotate(80deg); opacity: 1; } 100% { filter: hue-rotate(360deg); opacity: .7; } }
+@media (max-width: 600px) {
+  .sona-assistant, #root .sona-assistant, .sona-app .sona-assistant { inset: auto 12px 12px auto !important; }
+  .sona-chat-trigger { right: 12px !important; bottom: 12px !important; min-width: 124px !important; height: 50px !important; }
+  .sona-chat-panel { right: 12px !important; bottom: 12px !important; width: calc(100vw - 24px) !important; height: min(78vh, 680px) !important; border-radius: 24px !important; }
+  .sona-chat-panel::before { border-radius: 24px !important; }
+}
