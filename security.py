@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 import telegram_auth
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-
 _PUBLIC_PATHS = {"/", "/health", "/auth/telegram"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock()
@@ -27,9 +26,7 @@ def max_upload_bytes() -> int:
 
 def current_user() -> dict[str, Any]:
     user = CURRENT_USER.get()
-    if user:
-        return user
-    return {"id": "local", "first_name": "Local"}
+    return user or {"id": "local", "first_name": "Local"}
 
 
 def current_user_id() -> str:
@@ -37,7 +34,7 @@ def current_user_id() -> str:
 
 
 def is_local_request(request: Request) -> bool:
-    host = (request.client.host if request.client else "")
+    host = request.client.host if request.client else ""
     return host in {"127.0.0.1", "::1", "localhost"}
 
 
@@ -58,6 +55,13 @@ def security_middleware(app):
     async def _security(request: Request, call_next):
         path = request.url.path
         token = None
+
+        # CORS preflight carries no Telegram credentials; let CORSMiddleware handle it.
+        if request.method == "OPTIONS":
+            response = await call_next(request)
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            return response
+
         if path not in _PUBLIC_PATHS:
             init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
             allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "true").lower() == "true"
