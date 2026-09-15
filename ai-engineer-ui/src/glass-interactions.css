@@ -1,0 +1,147 @@
+/* SØNA Liquid Glass interaction layer */
+
+@keyframes sona-glass-shimmer {
+  0% { transform: translate3d(-120%, 0, 0) rotate(12deg); opacity: 0; }
+  20% { opacity: .7; }
+  55% { opacity: .2; }
+  100% { transform: translate3d(120%, 0, 0) rotate(12deg); opacity: 0; }
+}
+
+@keyframes rotate-gradient {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes borderBeamRotation {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* One SØNA mark only. Keep MUSIC LAB as a quieter descriptor underneath. */
+.brand b {
+  font-size: 0 !important;
+  line-height: 1 !important;
+  letter-spacing: -.045em !important;
+}
+.brand b::after {
+  content: "SØNA";
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -.045em;
+}
+.brand span {
+  display: block !important;
+  margin-top: 4px !important;
+  font-size: 7px !important;
+  line-height: 1 !important;
+  letter-spacing: .42em !important;
+  opacity: .52 !important;
+}
+
+/* Consistent tactile response across the entire interface. */
+button,
+a,
+input,
+select,
+textarea,
+.product-grid button,
+.primary,
+.secondary,
+.telegram,
+.nav button,
+.circle-arrow,
+.track-card,
+.tool-card,
+.card,
+.panel,
+.page-card,
+.player-card,
+.composer button {
+  transition:
+    transform 240ms cubic-bezier(.22,1,.36,1),
+    box-shadow 260ms cubic-bezier(.22,1,.36,1),
+    background-color 260ms ease,
+    border-color 260ms ease,
+    opacity 200ms ease,
+    filter 260ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:hover,
+a:hover,
+.product-grid button:hover,
+.track-card:hover,
+.tool-card:hover,
+.card:hover,
+.panel:hover,
+.page-card:hover {
+  transform: translateY(-1px);
+}
+
+button:active,
+a:active,
+.product-grid button:active,
+.track-card:active,
+.tool-card:active,
+.card:active,
+.panel:active,
+.page-card:active,
+.composer button:active {
+  transform: scale(.97) translateY(0) !important;
+  transition-duration: 90ms !important;
+}
+
+.primary:active,
+.telegram:active,
+.secondary:active,
+.nav button:active {
+  transform: scale(.965) !important;
+}
+
+/* Glass press highlight. */
+button::after,
+a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.34) 48%, transparent 72%);
+  transform: translateX(-65%);
+}
+
+button:active::after,
+a:active::after {
+  opacity: .8;
+  animation: sona-glass-shimmer 420ms cubic-bezier(.22,1,.36,1) both;
+}
+
+/* Keyboard focus stays elegant and visible. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.92),
+    0 0 0 5px rgba(167,139,250,.20),
+    0 12px 35px rgba(91,78,120,.10) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:hover,
+  a:hover {
+    filter: saturate(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
