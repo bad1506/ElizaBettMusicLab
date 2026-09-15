@@ -5,6 +5,7 @@ import hmac
 import os
 import secrets
 import sqlite3
+import time
 from pathlib import Path
 
 DB_PATH = Path(os.getenv("WEB_AUTH_DB", Path(__file__).resolve().parent / "web_auth.sqlite3"))
@@ -16,6 +17,7 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL)")
+    conn.execute("CREATE TABLE IF NOT EXISTS activity (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)")
     conn.commit()
     return conn
 
@@ -36,7 +38,7 @@ def _verify_password(password: str, stored: str) -> bool:
 
 
 def register(name: str, email: str, password: str) -> dict:
-    now = str(int(__import__("time").time()))
+    now = str(int(time.time()))
     user_id = secrets.token_hex(16)
     conn = _connect()
     try:
@@ -46,7 +48,9 @@ def register(name: str, email: str, password: str) -> dict:
         raise ValueError("Email уже зарегистрирован")
     finally:
         conn.close()
-    return create_session(user_id)
+    result = create_session(user_id)
+    add_activity(user_id, "account", "Аккаунт создан", "Добро пожаловать в SØNA")
+    return result
 
 
 def login(email: str, password: str) -> dict:
@@ -57,11 +61,12 @@ def login(email: str, password: str) -> dict:
         conn.close()
     if not row or not _verify_password(password, row["password_hash"]):
         raise ValueError("Неверный email или пароль")
-    return create_session(row["id"])
+    result = create_session(row["id"])
+    add_activity(row["id"], "account", "Вход в SØNA", "Успешная авторизация")
+    return result
 
 
 def create_session(user_id: str) -> dict:
-    import time
     token = secrets.token_urlsafe(48)
     expires = int(time.time()) + 60 * 60 * 24 * 30
     conn = _connect()
@@ -75,7 +80,6 @@ def create_session(user_id: str) -> dict:
 
 
 def get_user(token: str) -> dict | None:
-    import time
     if not token:
         return None
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -85,3 +89,21 @@ def get_user(token: str) -> dict | None:
     finally:
         conn.close()
     return dict(row) if row else None
+
+
+def add_activity(user_id: str, kind: str, title: str, detail: str = "") -> None:
+    conn = _connect()
+    try:
+        conn.execute("INSERT INTO activity(user_id,kind,title,detail,created_at) VALUES(?,?,?,?,?)", (user_id, kind[:40], title[:160], detail[:1000], str(int(time.time()))))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_activity(user_id: str, limit: int = 50) -> list[dict]:
+    conn = _connect()
+    try:
+        rows = conn.execute("SELECT id,kind,title,detail,created_at FROM activity WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, max(1, min(limit, 100)))).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
