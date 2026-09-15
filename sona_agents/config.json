@@ -5,7 +5,7 @@
     "sona-assistant": {
       "description": "Основной музыкальный AI-ассистент SØNA.",
       "default_skill": "assistant",
-      "skills": ["assistant", "songwriter", "songwriting-and-ai-music", "audio-analysis", "mastering", "trends", "analytics", "finance", "projects", "release-marketing"]
+      "skills": ["assistant", "songwriter", "songwriting-and-ai-music", "audio-analysis", "mastering", "trends", "analytics", "finance", "projects", "release-marketing", "github-commercial-product"]
     },
     "sona-prompt-engineer": {
       "description": "Агент для улучшения и построения промптов.",
@@ -29,9 +29,15 @@
       "repository": "f/prompts.chat",
       "api": "https://prompts.chat/api/prompts",
       "enabled": true
+    },
+    "github-commercial": {
+      "type": "synthesized-agentskill",
+      "repositories": ["coreyhaines31/marketingskills", "phuryn/pm-skills"],
+      "policy": "adapted-local-skill"
     }
   },
   "routing": {
+    "github-commercial-product": ["сайт", "коммерческий", "конверсия", "онбординг", "аккаунт", "цена", "тариф", "продукт", "ux", "воронка", "маркетинг продукта"],
     "songwriting-and-ai-music": ["suno", "suno prompt", "ai music", "музыкальный промпт"],
     "songwriter": ["песня", "трек", "припев", "куплет", "хук", "лирика", "текст песни"],
     "audio-analysis": ["анализ аудио", "lufs", "true peak", "микс", "спектр", "динамика"],
