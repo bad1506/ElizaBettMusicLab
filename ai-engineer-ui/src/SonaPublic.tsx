@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, ExternalLink, Headphones, Play, RefreshCw, Send, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Headphones, Play, RefreshCw, Sparkles, X } from "lucide-react";
 import ExistingApp from "./App";
 import "./SonaPublic.css";
 
