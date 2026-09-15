@@ -4,6 +4,7 @@ import './index.css'
 import './glass-interactions.css'
 import './SonaAssistantChat.css'
 import './SonaSferoomChat.css'
+import './SonaCommercialFixes.css'
 import './sona-cursor-glow.css'
 import './SonaAbout.css'
 import SonaPublic from './SonaPublic.tsx'
@@ -13,7 +14,7 @@ type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
 const telegram = window.Telegram?.WebApp
 const initData = telegram?.initData?.trim() || ''
-const api = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : 'https://elizabettmusiclab-1.onrender.com')
+const api = import.meta.env.VITE_API_URL || '/api'
 if (telegram) { telegram.ready?.(); telegram.expand?.(); telegram.setHeaderColor?.('#f5f5f3'); telegram.setBackgroundColor?.('#f5f5f3') }
 const originalFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
@@ -21,7 +22,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
-  const isPublicRequest = url.includes('/auth/register') || url.includes('/auth/login') || url.includes('/auth/telegram') || url.includes('/public/yandex-chart') || url.includes('/health')
+  const isPublicRequest = url.includes('/auth/register') || url.includes('/auth/login') || url.includes('/auth/telegram') || url.includes('/public/yandex-chart') || url.includes('/health') || url.includes('/songwriter')
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
