@@ -113,23 +113,19 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["technical"]["bpm"], 120)
         mocked.assert_called_once_with()
 
-    @patch("agents.music_context.current_melody_map", return_value={"status": "ok", "file": "track.wav", "melody_map": {"events": []}})
-    @patch("agents.music_context.current_timeline", return_value={"status": "ok", "file": "track.wav", "loudness": {"segments": []}})
-    @patch("agents.music_context.current_intelligence", return_value={"status": "ok", "file": "track.wav", "spectral": {}, "stereo": {}, "transients": {}, "vocal_events": {}})
-    @patch("agents.music_context.current_vocal_context", return_value={"status": "ok", "file": "track.wav", "audio_context": {"duration": 180, "tempo": {"bpm": 124}, "key": {"name": "A minor"}, "sections": [{"index": 1, "start": 0, "end": 30, "role_hint": "verse", "energy_db_relative": 0}]}})
-    @patch("agents.music_context.current_analysis", return_value={"status": "ok", "file": "track.wav", "analysis": {"decisions": [{"issue": "masking", "severity": "high", "recommendation": "Сделать dynamic EQ"}], "processing_plan": []}})
-    def test_unified_intelligence_report_composes_snapshot(self, analysis_mock, vocal_mock, intelligence_mock, timeline_mock, melody_mock):
+    def test_unified_intelligence_report_composes_cached_snapshot(self):
         from agents.music_context import clear_music_snapshot_cache, current_music_intelligence
         clear_music_snapshot_cache()
-        with patch("agents.music_context._latest_audio", return_value=Path("/tmp/track.wav")), patch("agents.music_context._get_music_snapshot") as snapshot_mock:
-            snapshot_mock.return_value = {
-                "status": "ok", "file": "track.wav",
-                "analysis": analysis_mock.return_value["analysis"],
-                "audio_context": vocal_mock.return_value["audio_context"],
-                "intelligence": intelligence_mock.return_value,
-                "timeline": timeline_mock.return_value,
-                "melody_map": melody_mock.return_value["melody_map"],
-            }
+        snapshot = {
+            "status": "ok",
+            "file": "track.wav",
+            "analysis": {"decisions": [{"issue": "masking", "severity": "high", "recommendation": "Сделать dynamic EQ"}], "processing_plan": []},
+            "audio_context": {"duration": 180, "tempo": {"bpm": 124}, "key": {"name": "A minor"}, "sections": [{"index": 1, "start": 0, "end": 30, "role_hint": "verse", "energy_db_relative": 0}]},
+            "intelligence": {"spectral": {}, "stereo": {}, "transients": {}, "vocal_events": {}},
+            "timeline": {"loudness": {"segments": []}},
+            "melody_map": {"events": []},
+        }
+        with patch("agents.music_context._latest_audio", return_value=Path("/tmp/track.wav")), patch("agents.music_context._get_music_snapshot", return_value=snapshot) as snapshot_mock:
             result = current_music_intelligence()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["file"], "track.wav")
@@ -139,11 +135,7 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["structure"]["section_count"], 1)
         self.assertEqual(result["issues"][0]["severity"], "high")
         self.assertEqual(result["priority_order"], ["Сделать dynamic EQ"])
-        analysis_mock.assert_called_once()
-        vocal_mock.assert_called_once()
-        intelligence_mock.assert_called_once()
-        timeline_mock.assert_called_once()
-        melody_mock.assert_called_once()
+        snapshot_mock.assert_called_once()
 
     def _mock_audio_snapshot(self, user_id="user-1"):
         from agents.music_context import clear_music_snapshot_cache
