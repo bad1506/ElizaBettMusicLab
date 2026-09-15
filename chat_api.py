@@ -32,8 +32,10 @@ class AgentRunRequest(ChatRequest):
 
 def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = None):
     context = dict(request.context)
-    if skill:
-        context["skill"] = skill
+    # UI can explicitly select a skill in context; an explicit request argument wins.
+    requested_skill = skill or str(context.get("skill") or "").strip() or None
+    if requested_skill:
+        context["skill"] = requested_skill
     if agent:
         context["agent"] = agent
 
@@ -41,7 +43,7 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
         result = router.run(
             AgentRequest(
                 message=request.message,
-                skill=skill,
+                skill=requested_skill,
                 history=[item.model_dump() for item in request.history[-20:]],
                 context=context,
             )
@@ -63,7 +65,8 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
 def register(app):
     @app.post("/sona-chat")
     def chat(request: ChatRequest):
-        # Основной пользовательский чат. Роутинг skill происходит автоматически.
+        # Основной пользовательский чат. Роутинг skill происходит автоматически
+        # или принудительно через context.skill для конкретного инструмента.
         return _run(request)
 
     @app.post("/agents/run")
