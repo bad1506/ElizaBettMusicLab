@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 import ai_assistant
@@ -75,9 +76,13 @@ def register(app):
                 *conversation,
             ],
         }
-        answer = ai_assistant._openai(payload, 120)
+        try:
+            answer = ai_assistant._openai(payload, 120)
+        except Exception as exc:
+            print(f"SØNA chat error: {exc}")
+            answer = None
         if not answer:
-            raise RuntimeError("SØNA Assistant AI service unavailable")
+            raise HTTPException(502, "SØNA Assistant временно недоступен. Проверьте AI API на backend.")
         return {
             "ok": True,
             "answer": answer,
