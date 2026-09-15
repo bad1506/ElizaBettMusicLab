@@ -3,11 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import audio_intelligence
-import audio_timeline
-import audio_to_song
-import master_engine
-import melody_alignment
 import security
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,8 +12,7 @@ AUDIO_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".ogg"}
 def _latest_audio() -> Path | None:
     folder = security.user_storage(ROOT)["input"]
     candidates = [
-        path
-        for path in folder.iterdir()
+        path for path in folder.iterdir()
         if path.is_file() and path.suffix.lower() in AUDIO_EXTS
     ]
     return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
@@ -33,6 +27,8 @@ def _audio_or_none() -> Path:
 
 def current_analysis() -> dict[str, Any] | None:
     """Возвращает актуальный анализ последнего аудиофайла текущего пользователя."""
+    import master_engine
+
     path = _latest_audio()
     if path is None:
         return None
@@ -47,12 +43,16 @@ def current_analysis() -> dict[str, Any] | None:
 
 def current_timeline() -> dict[str, Any]:
     """Возвращает waveform/loudness timeline текущего пользовательского трека."""
+    import audio_timeline
+
     path = _audio_or_none()
     return {"status": "ok", "file": path.name, **audio_timeline.build_timeline(path)}
 
 
 def current_intelligence() -> dict[str, Any]:
     """Возвращает сегментный spectral/stereo/transient/vocal intelligence текущего трека."""
+    import audio_intelligence
+
     path = _audio_or_none()
     return {
         "status": "ok",
@@ -63,12 +63,17 @@ def current_intelligence() -> dict[str, Any]:
 
 def current_vocal_context() -> dict[str, Any]:
     """Возвращает музыкальный контекст вокала и структуры текущего трека."""
+    import audio_to_song
+
     path = _audio_or_none()
     return {"status": "ok", "file": path.name, "audio_context": audio_to_song.analyze(path)}
 
 
 def current_melody_map() -> dict[str, Any]:
     """Возвращает оценочную melody map текущего трека."""
+    import audio_to_song
+    import melody_alignment
+
     path = _audio_or_none()
     audio = audio_to_song.analyze(path)
     bpm = (audio.get("tempo") or {}).get("bpm")
