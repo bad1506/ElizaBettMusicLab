@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { ArrowUp, Bot, Sparkles, X } from "lucide-react";
 import "./SonaAssistantChat.css";
 
@@ -30,23 +31,13 @@ export default function SonaAssistantChat() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history,
-          context: { product: "SØNA", language: "ru" },
-        }),
+        body: JSON.stringify({ message: text, history, context: { product: "SØNA", language: "ru" } }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.detail || "Не удалось получить ответ");
       setMessages((prev) => [...prev, { role: "assistant", text: data.answer || "Не удалось получить ответ." }]);
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          text: error instanceof Error ? `Не удалось ответить: ${error.message}` : "Не удалось ответить. Попробуй ещё раз.",
-        },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: error instanceof Error ? `Не удалось ответить: ${error.message}` : "Не удалось ответить. Попробуй ещё раз." }]);
     } finally {
       setBusy(false);
     }
@@ -63,36 +54,18 @@ export default function SonaAssistantChat() {
             </div>
             <button className="sona-chat-close" onClick={() => setOpen(false)} aria-label="Закрыть"><X size={18} /></button>
           </header>
-
           <div className="sona-chat-messages">
-            {messages.map((message, index) => (
-              <div key={`${message.role}-${index}`} className={`sona-chat-message ${message.role}`}>
-                {message.text}
-              </div>
-            ))}
+            {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`sona-chat-message ${message.role}`}>{message.text}</div>)}
             {busy && <div className="sona-chat-message assistant typing"><span /><span /><span /></div>}
           </div>
-
           <form className="sona-chat-composer" onSubmit={send}>
-            <input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Напиши сообщение…"
-              aria-label="Сообщение"
-              autoFocus
-            />
+            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Напиши сообщение…" aria-label="Сообщение" autoFocus />
             <button type="submit" disabled={!canSend} aria-label="Отправить"><ArrowUp size={17} /></button>
           </form>
           <div className="sona-chat-hint">SØNA может помочь с музыкой, текстом, анализом и идеями.</div>
         </section>
       )}
-
-      {!open && (
-        <button className="sona-chat-trigger" onClick={() => setOpen(true)}>
-          <Sparkles size={18} />
-          <span>Чат SØNA</span>
-        </button>
-      )}
+      {!open && <button className="sona-chat-trigger" onClick={() => setOpen(true)}><Sparkles size={18} /><span>Чат SØNA</span></button>}
     </div>
   );
 }
