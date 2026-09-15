@@ -14,8 +14,10 @@ Act as the main workspace assistant for musicians. Understand intent first, then
 
 ## Routing
 songwriter -> songwriting skill
-analyzer -> audio-analysis skill
-master -> mastering skill
+audio-analysis -> audio-analysis skill
+mastering -> mastering skill
 trends -> trends skill
+analytics -> analytics skill
+finance -> finance skill
 projects -> projects skill
 release -> release-marketing skill
