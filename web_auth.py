@@ -8,10 +8,17 @@ import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(os.getenv("WEB_AUTH_DB", Path(__file__).resolve().parent / "web_auth.sqlite3"))
+DATA_DIR = Path(os.getenv("SONA_DATA_DIR", "/var/data/sona"))
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    DATA_DIR = Path(__file__).resolve().parent / "data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path(os.getenv("WEB_AUTH_DB", DATA_DIR / "web_auth.sqlite3"))
 
 
 def _connect() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
