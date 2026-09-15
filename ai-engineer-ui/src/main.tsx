@@ -56,8 +56,47 @@ if (initData) {
     .catch(() => undefined)
 }
 
+// Keep the existing single-page UI shareable with real URLs.
+// The App component owns the visible page state; this bridge synchronizes it
+// with browser history without adding a router dependency to the Mini App.
+const ROUTES: Record<string, string> = {
+  '/': 'home',
+  '/tools': 'tools',
+  '/tracks': 'tracks',
+  '/projects': 'projects',
+  '/pricing': 'pricing',
+  '/about': 'about',
+}
+const PAGE_BY_LABEL: Record<string, string> = {
+  'Главная': '/', 'AI Инструменты': '/tools', 'Треки': '/tracks', 'Проекты': '/projects', 'Тарифы': '/pricing', 'О нас': '/about',
+  'Home': '/', 'AI Tools': '/tools', 'Tracks': '/tracks', 'Projects': '/projects', 'Pricing': '/pricing', 'About': '/about',
+}
+
+function syncPageFromUrl() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  const page = ROUTES[path] || 'home'
+  const buttons = Array.from(document.querySelectorAll('button'))
+  const labels = Object.entries(ROUTES).find(([, value]) => value === page)?.[0]
+  const labelMap = labels === '/' ? ['Главная', 'Home'] : Object.entries(PAGE_BY_LABEL).filter(([, route]) => route === path).map(([label]) => label)
+  const button = buttons.find((candidate) => labelMap.includes(candidate.textContent?.trim() || ''))
+  button?.click()
+  document.title = page === 'home' ? 'Eliza Bett Music Lab' : `${page === 'tools' ? 'AI Music Tools' : page[0].toUpperCase() + page.slice(1)} · Eliza Bett Music Lab`
+}
+
+window.addEventListener('popstate', syncPageFromUrl)
+window.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement | null
+  const button = target?.closest('button')
+  const label = button?.textContent?.trim() || ''
+  const route = PAGE_BY_LABEL[label]
+  if (!route || route === window.location.pathname) return
+  window.history.pushState({}, '', route)
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+
+requestAnimationFrame(() => syncPageFromUrl())
