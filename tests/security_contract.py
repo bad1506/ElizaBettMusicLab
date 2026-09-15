@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 security = (ROOT / "security.py").read_text(encoding="utf-8")
 api = (ROOT / "api_secure.py").read_text(encoding="utf-8")
+auth = (ROOT / "telegram_auth.py").read_text(encoding="utf-8")
 
 assert 'os.getenv("ALLOW_LOCAL_UNAUTH", "false")' in security
 assert 'allow_credentials=False' in api
@@ -14,6 +15,8 @@ assert 'is_relative_to(root)' in security
 assert 'uuid.uuid4().hex' in api
 assert 'max_upload_bytes()' in api
 assert 'docs_url="/docs" if ENABLE_DOCS else None' in api
+assert 'if not user or not user.get("id")' in auth
+assert 'hmac.compare_digest' in auth
 
 # Production endpoints must not be accidentally added to the public allowlist.
 for path in [
