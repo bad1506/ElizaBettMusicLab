@@ -10,7 +10,18 @@ type MusicReport = {
   issues?: string[];
   priority_order?: string[];
 };
-type Message = { role: "assistant" | "user"; text: string; meta?: { agent?: string; skill?: string; tools?: string[]; musicReport?: MusicReport } };
+type MusicActionReport = {
+  status?: string;
+  file?: string;
+  section?: { start_sec?: number; end_sec?: number; duration_sec?: number };
+  section_selection?: { mode?: string; selected_index?: number; selected_role_hint?: string };
+  vocal?: { median_voiced_percent?: number | null };
+  metrics?: { band_delta_percentage_points_vs_outside?: Record<string, number>; section_lufs?: number | null; outside_lufs?: number | null; stereo_correlation?: number | null; transient_count?: number };
+  diagnosis?: Array<{ cause?: string; severity?: string; evidence?: string; recommendation?: string }>;
+  recommended_order?: string[];
+  limitations?: string[];
+};
+type Message = { role: "assistant" | "user"; text: string; meta?: { agent?: string; skill?: string; tools?: string[]; musicReport?: MusicReport; musicActionReport?: MusicActionReport; musicActionTool?: string } };
 type QuickAction = readonly [string, string, string];
 type ReportAction = readonly [string, string];
 const STORAGE_KEY = "sona_sferoom_messages";
@@ -34,6 +45,9 @@ const REPORT_ACTIONS: ReportAction[] = [
 ];
 const initial: Message[] = [{ role: "assistant", text: "Ты в главном меню SØNA. Я могу помочь с текстом песни, созданием трека, анализом, мастерингом, трендами, статистикой, финансами, проектами, продвижением и творческим портретом. Куда двинемся?" }];
 
+function formatTime(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.floor(value / 60)}:${String(Math.round(value % 60)).padStart(2, "0")}` : "—";
+}
 function MusicReportCard({ report, onAction }: { report: MusicReport; onAction: (prompt: string) => void }) {
   const technical = report.technical || {};
   const loudness = report.mix?.loudness || {};
@@ -41,6 +55,15 @@ function MusicReportCard({ report, onAction }: { report: MusicReport; onAction: 
   const priorities = Array.isArray(report.priority_order) ? report.priority_order.filter(Boolean).slice(0, 3) : [];
   const metric = (value: unknown, suffix = "") => typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(value % 1 ? 1 : 0)}${suffix}` : "—";
   return <div className="sona-music-report"><div className="sona-music-report-head"><span>UNIFIED INTELLIGENCE</span><strong>{report.file || "Текущий трек"}</strong></div><div className="sona-music-report-grid"><div><b>{metric(technical.bpm)}</b><small>BPM</small></div><div><b>{typeof technical.key === "string" ? technical.key : "—"}</b><small>ТОНАЛЬНОСТЬ</small></div><div><b>{metric(loudness.integrated_lufs, " LUFS")}</b><small>LOUDNESS</small></div><div><b>{metric(loudness.true_peak_db, " dB")}</b><small>TRUE PEAK</small></div></div>{issues.length > 0 && <div className="sona-music-report-list"><span>ТОЧКИ ВНИМАНИЯ</span>{issues.map((item, index) => <p key={`issue-${index}`}>{item}</p>)}</div>}{priorities.length > 0 && <div className="sona-music-report-list"><span>ПРИОРИТЕТЫ</span>{priorities.map((item, index) => <p key={`priority-${index}`}>{index + 1}. {item}</p>)}</div>}<div className="sona-music-report-buttons">{REPORT_ACTIONS.map(([label, prompt]) => <button key={label} type="button" onClick={() => onAction(prompt)}>{label}</button>)}</div></div>;
+}
+
+function MusicActionCard({ report, tool }: { report: MusicActionReport; tool?: string }) {
+  if (report.status !== "ok") return null;
+  const diagnosis = Array.isArray(report.diagnosis) ? report.diagnosis.slice(0, 4) : [];
+  const recommendations = Array.isArray(report.recommended_order) ? report.recommended_order.slice(0, 4) : [];
+  const section = report.section || {};
+  const title = tool === "music.diagnose_vocal_in_section" ? "VOCAL DIAGNOSIS" : tool === "music.analyze_mix" ? "MIX DIAGNOSIS" : "MUSIC ACTION";
+  return <div className="sona-music-action"><div className="sona-music-action-head"><span>{title}</span><strong>{report.file || "Текущий трек"}</strong></div>{section.start_sec !== undefined && <div className="sona-music-action-section"><b>{formatTime(section.start_sec)} — {formatTime(section.end_sec)}</b><small>{report.section_selection?.selected_role_hint || "АНАЛИЗИРУЕМЫЙ УЧАСТОК"}</small></div>}{report.vocal?.median_voiced_percent != null && <div className="sona-music-action-vocal"><b>{report.vocal.median_voiced_percent.toFixed(0)}%</b><span>ВОКАЛЬНАЯ АКТИВНОСТЬ</span></div>}{diagnosis.length > 0 && <div className="sona-music-action-list"><span>ДИАГНОЗ</span>{diagnosis.map((item, index) => <div key={`diag-${index}`}><b>{item.severity || "info"} · {item.cause || "Причина"}</b>{item.evidence && <p>{item.evidence}</p>}{item.recommendation && <p>{item.recommendation}</p>}</div>)}</div>}{recommendations.length > 0 && <div className="sona-music-action-list"><span>ПОРЯДОК ИСПРАВЛЕНИЯ</span>{recommendations.map((item, index) => <p key={`rec-${index}`}>{index + 1}. {item}</p>)}</div>}</div>;
 }
 
 export default function SonaSferoomChat() {
@@ -64,10 +87,10 @@ export default function SonaSferoomChat() {
       if (!response.ok) throw new Error(data?.detail || "Не удалось получить ответ");
       const tools = Array.isArray(data.tool_calls) ? data.tool_calls.map((item: { name?: unknown }) => typeof item?.name === "string" ? item.name : "").filter(Boolean) : [];
       setAgent(typeof data.agent === "string" ? data.agent : selectedAgent);
-      setMessages(prev => [...prev, { role: "assistant", text: data.answer || "Не удалось получить ответ.", meta: { agent: data.agent, skill: data.skill, tools, musicReport: data.music_report } }]);
+      setMessages(prev => [...prev, { role: "assistant", text: data.answer || "Не удалось получить ответ.", meta: { agent: data.agent, skill: data.skill, tools, musicReport: data.music_report, musicActionReport: data.music_action_report, musicActionTool: data.music_action_tool } }]);
     } catch (error) { setMessages(prev => [...prev, { role: "assistant", text: error instanceof Error ? `Не удалось ответить: ${error.message}` : "Не удалось ответить. Попробуй ещё раз." }]); }
     finally { setBusy(false); }
   }
   function handleReportAction(prompt: string) { void sendText(prompt, "assistant"); }
-  return <div className={`sona-sferoom ${open ? "is-open" : ""}`}>{open ? <section className="sona-sferoom-panel" aria-label="SØNA Assistant" onMouseMove={followPointer}><div className="sona-sferoom-noise"/><header className="sona-sferoom-header"><div className="sona-sferoom-brand"><div className="sona-sferoom-avatar"><Bot size={19}/></div><div><strong>SØNA Assistant</strong><span><i/> Онлайн</span></div></div><button className="sona-sferoom-close" onClick={() => setOpen(false)} aria-label="Закрыть"><X size={20}/></button></header><div className="sona-sferoom-body" ref={scrollRef}>{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`sona-sferoom-message ${message.role}`}>{message.text}{message.meta?.musicReport?.status === "ok" && <MusicReportCard report={message.meta.musicReport} onAction={handleReportAction}/>} {message.meta && <small className="sona-sferoom-meta">{message.meta.agent ? `Агент: ${message.meta.agent}` : "SØNA"}{message.meta.tools?.length ? ` · Инструменты: ${message.meta.tools.join(", ")}` : ""}</small>}</div>)}{busy && <div className="sona-sferoom-message assistant typing"><span/><span/><span/></div>}</div><div className="sona-sferoom-actions">{QUICK_ACTIONS.map(([label, prompt, actionAgent]) => <button key={label} onClick={() => { setAgent(actionAgent); void sendText(prompt, actionAgent); }} disabled={busy}>{label}</button>)}</div><form className="sona-sferoom-composer" onSubmit={e => { e.preventDefault(); void sendText(); }}><button type="button" className="composer-icon" aria-label="Музыка"><Music2 size={18}/></button><button type="button" className="composer-icon" aria-label="Голос"><Mic size={18}/></button><input value={input} onChange={e => setInput(e.target.value)} placeholder="Напишите сообщение..." aria-label="Сообщение"/><button className="composer-send" type="submit" disabled={!canSend} aria-label="Отправить"><ArrowUp size={19}/></button></form><div className="sona-sferoom-disclaimer">SØNA может ошибаться. Проверяйте важную информацию.</div></section> : <button className="sona-sferoom-trigger" onClick={() => setOpen(true)} aria-label="Открыть SØNA Assistant"><Bot size={18}/><span>SØNA Assistant</span><i/></button>}</div>;
+  return <div className={`sona-sferoom ${open ? "is-open" : ""}`}>{open ? <section className="sona-sferoom-panel" aria-label="SØNA Assistant" onMouseMove={followPointer}><div className="sona-sferoom-noise"/><header className="sona-sferoom-header"><div className="sona-sferoom-brand"><div className="sona-sferoom-avatar"><Bot size={19}/></div><div><strong>SØNA Assistant</strong><span><i/> Онлайн</span></div></div><button className="sona-sferoom-close" onClick={() => setOpen(false)} aria-label="Закрыть"><X size={20}/></button></header><div className="sona-sferoom-body" ref={scrollRef}>{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`sona-sferoom-message ${message.role}`}>{message.text}{message.meta?.musicReport?.status === "ok" && <MusicReportCard report={message.meta.musicReport} onAction={handleReportAction}/>} {message.meta?.musicActionReport?.status === "ok" && <MusicActionCard report={message.meta.musicActionReport} tool={message.meta.musicActionTool}/>} {message.meta && <small className="sona-sferoom-meta">{message.meta.agent ? `Агент: ${message.meta.agent}` : "SØNA"}{message.meta.tools?.length ? ` · Инструменты: ${message.meta.tools.join(", ")}` : ""}</small>}</div>)}{busy && <div className="sona-sferoom-message assistant typing"><span/><span/><span/></div>}</div><div className="sona-sferoom-actions">{QUICK_ACTIONS.map(([label, prompt, actionAgent]) => <button key={label} onClick={() => { setAgent(actionAgent); void sendText(prompt, actionAgent); }} disabled={busy}>{label}</button>)}</div><form className="sona-sferoom-composer" onSubmit={e => { e.preventDefault(); void sendText(); }}><button type="button" className="composer-icon" aria-label="Музыка"><Music2 size={18}/></button><button type="button" className="composer-icon" aria-label="Голос"><Mic size={18}/></button><input value={input} onChange={e => setInput(e.target.value)} placeholder="Напишите сообщение..." aria-label="Сообщение"/><button className="composer-send" type="submit" disabled={!canSend} aria-label="Отправить"><ArrowUp size={19}/></button></form><div className="sona-sferoom-disclaimer">SØNA может ошибаться. Проверяйте важную информацию.</div></section> : <button className="sona-sferoom-trigger" onClick={() => setOpen(true)} aria-label="Открыть SØNA Assistant"><Bot size={18}/><span>SØNA Assistant</span><i/></button>}</div>;
 }
