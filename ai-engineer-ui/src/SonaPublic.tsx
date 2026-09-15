@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, ExternalLink, Headphones, Play, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Headphones, Play, RefreshCw, Send, Sparkles, X } from "lucide-react";
 import ExistingApp from "./App";
 import "./SonaPublic.css";
 
@@ -8,6 +8,7 @@ type ChartTrack = { position: number; title: string; artist: string; cover?: str
 
 const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || "https://t.me/ElizaBettMusicLabBot?startapp";
 const YANDEX_CHART = "/api/public/yandex-chart";
+const ACCOUNT_KEY = "sona_account";
 
 const nav = [
   ["Главная", "home"], ["AI Инструменты", "tools"], ["Треки", "tracks"],
@@ -32,53 +33,15 @@ function normalizeChart(payload: any): ChartTrack[] {
     const cover = coverUri ? String(coverUri).replace("%%", "400x400") : undefined;
     const id = row?.id || row?.track_id?.id || entry?.track_id?.id;
     const albumId = row?.albums?.[0]?.id || row?.album?.id || row?.track_id?.album_id;
-    return {
-      position: Number(entry?.position || index + 1),
-      title: String(row?.title || entry?.title || `Трек ${index + 1}`),
-      artist: artist || "Yandex Music",
-      cover,
-      listeners: Number(entry?.listeners || 0) || undefined,
-      shift: Number(entry?.shift || 0) || undefined,
-      url: id ? `https://music.yandex.ru/album/${albumId || 0}/track/${id}` : undefined,
-    };
+    return { position: Number(entry?.position || index + 1), title: String(row?.title || entry?.title || `Трек ${index + 1}`), artist: artist || "Yandex Music", cover, listeners: Number(entry?.listeners || 0) || undefined, shift: Number(entry?.shift || 0) || undefined, url: id ? `https://music.yandex.ru/album/${albumId || 0}/track/${id}` : undefined };
   });
 }
 
 function Chart() {
-  const [tracks, setTracks] = useState<ChartTrack[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [updated, setUpdated] = useState<Date | null>(null);
-
-  async function load() {
-    setLoading(true); setError("");
-    try {
-      const response = await fetch(YANDEX_CHART, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const next = normalizeChart(data);
-      if (!next.length) throw new Error("Пустой чарт");
-      setTracks(next); setUpdated(new Date());
-    } catch {
-      setError("Не удалось получить актуальный чарт. Попробуйте обновить.");
-    } finally { setLoading(false); }
-  }
-
+  const [tracks, setTracks] = useState<ChartTrack[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [updated, setUpdated] = useState<Date | null>(null);
+  async function load() { setLoading(true); setError(""); try { const response = await fetch(YANDEX_CHART, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const data = await response.json(); const next = normalizeChart(data); if (!next.length) throw new Error("Пустой чарт"); setTracks(next); setUpdated(new Date()); } catch { setError("Не удалось получить актуальный чарт. Попробуйте обновить."); } finally { setLoading(false); } }
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 10 * 60 * 1000); return () => window.clearInterval(timer); }, []);
-
-  return <section className="sona-section chart-section">
-    <div className="section-intro"><div><span className="sona-eyebrow">YANDEX MUSIC · LIVE CHART</span><h1>Топ чарта</h1><p>Актуальный российский чарт Яндекс Музыки прямо внутри SØNA. Обновляем автоматически каждые 10 минут.</p></div><div className="live-chip"><i /> LIVE {updated ? updated.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "ONLINE"}<button onClick={load} aria-label="Обновить"><RefreshCw size={15} className={loading ? "spin" : ""}/></button></div></div>
-    <div className="chart-card">
-      {loading && !tracks.length ? <div className="chart-state"><RefreshCw className="spin"/><span>Загружаем актуальный чарт…</span></div> : error && !tracks.length ? <div className="chart-state"><span>{error}</span><button className="glass-button" onClick={load}>Обновить</button></div> : tracks.map(track => <div className="chart-row" key={`${track.position}-${track.title}`}>
-        <b className="chart-pos">{String(track.position).padStart(2, "0")}</b>
-        <div className="chart-cover" style={track.cover ? { backgroundImage: `url(${track.cover})` } : undefined}><Play size={14} fill="currentColor"/></div>
-        <div className="chart-track"><strong>{track.title}</strong><span>{track.artist}</span></div>
-        <div className="chart-shift">{track.shift ? `${track.shift > 0 ? "+" : ""}${track.shift}` : "—"}</div>
-        {track.url ? <a className="chart-open" href={track.url} target="_blank" rel="noreferrer" aria-label={`Открыть ${track.title}`}><ExternalLink size={15}/></a> : <span className="chart-open"><Headphones size={15}/></span>}
-      </div>)}
-    </div>
-    <div className="chart-foot"><span>Источник: Яндекс Музыка</span><a href="https://music.yandex.ru/chart" target="_blank" rel="noreferrer">Открыть полный чарт <ExternalLink size={12}/></a></div>
-  </section>;
+  return <section className="sona-section chart-section"><div className="section-intro"><div><span className="sona-eyebrow">YANDEX MUSIC · LIVE CHART</span><h1>Топ чарта</h1><p>Актуальный российский чарт Яндекс Музыки прямо внутри SØNA. Обновляем автоматически каждые 10 минут.</p></div><div className="live-chip"><i /> LIVE {updated ? updated.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "ONLINE"}<button onClick={load} aria-label="Обновить"><RefreshCw size={15} className={loading ? "spin" : ""}/></button></div></div><div className="chart-card">{loading && !tracks.length ? <div className="chart-state"><RefreshCw className="spin"/><span>Загружаем актуальный чарт…</span></div> : error && !tracks.length ? <div className="chart-state"><span>{error}</span><button className="glass-button" onClick={load}>Обновить</button></div> : tracks.map(track => <div className="chart-row" key={`${track.position}-${track.title}`}><b className="chart-pos">{String(track.position).padStart(2, "0")}</b><div className="chart-cover" style={track.cover ? { backgroundImage: `url(${track.cover})` } : undefined}><Play size={14} fill="currentColor"/></div><div className="chart-track"><strong>{track.title}</strong><span>{track.artist}</span></div><div className="chart-shift">{track.shift ? `${track.shift > 0 ? "+" : ""}${track.shift}` : "—"}</div>{track.url ? <a className="chart-open" href={track.url} target="_blank" rel="noreferrer" aria-label={`Открыть ${track.title}`}><ExternalLink size={15}/></a> : <span className="chart-open"><Headphones size={15}/></span>}</div>)}</div><div className="chart-foot"><span>Источник: Яндекс Музыка</span><a href="https://music.yandex.ru/chart" target="_blank" rel="noreferrer">Открыть полный чарт <ExternalLink size={12}/></a></div></section>;
 }
 
 const projects = [
@@ -87,32 +50,39 @@ const projects = [
   { name: "Кукла Вуду", type: "Single · Dark Pop", status: "RELEASE READY", meta: "Final master", accent: "violet" },
   { name: "Новый мир", type: "EP · R&B", status: "WRITING", meta: "4 tracks · 2026", accent: "mint" },
 ];
-
 const plans = [
   { name: "FREE", price: "0 ₽", note: "Чтобы попробовать SØNA", features: ["AI Songwriter", "Базовый анализ", "3 проекта"] },
   { name: "PRO", price: "990 ₽", note: "Для регулярного выпуска музыки", features: ["Все AI-инструменты", "AI Mastering", "20 проектов", "Trends + Live Chart"], featured: true },
   { name: "STUDIO", price: "2 990 ₽", note: "Для артиста и команды", features: ["Всё из PRO", "Неограниченные проекты", "Расширенный анализ", "Приоритетная обработка"] },
 ];
 
-function PublicHeader({ page }: { page: Page }) {
-  return <header className="sona-header"><button className="sona-logo" onClick={() => goPage("home")}><span>SØNA</span><small>MUSIC INTELLIGENCE</small></button><nav>{nav.map(([label, id]) => <button key={id} className={page === id ? "active" : ""} onClick={() => goPage(id)}>{label}</button>)}</nav><button className="sona-telegram" onClick={() => window.open(TELEGRAM_URL, "_blank", "noopener,noreferrer")}>Открыть в Telegram <ArrowRight size={14}/></button></header>;
+function PublicHeader({ page, onAccount }: { page: Page; onAccount: () => void }) {
+  const account = localStorage.getItem(ACCOUNT_KEY);
+  return <header className="sona-header"><button className="sona-logo" onClick={() => goPage("home")}><span>SØNA</span><small>MUSIC INTELLIGENCE</small></button><nav>{nav.map(([label, id]) => <button key={id} className={page === id ? "active" : ""} onClick={() => goPage(id)}>{label}</button>)}</nav><div className="header-actions"><button className="account-button" onClick={onAccount}>{account ? "Мой аккаунт" : "Войти / Регистрация"}</button><button className="sona-telegram" onClick={() => window.open(TELEGRAM_URL, "_blank", "noopener,noreferrer")}>Открыть в Telegram <ArrowRight size={14}/></button></div></header>;
 }
 
-function Home() {
-  return <main className="sona-home"><section className="sona-hero"><div className="hero-glass"><span className="sona-eyebrow">MUSIC · AI · CREATIVITY · NO LIMITS</span><h1>SØNA<br/><em>Music Intelligence</em></h1><h2>Создавай. Анализируй. Улучшай. Выпускай.</h2><p>Все инструменты для твоей музыки — в одном месте.</p><div className="hero-buttons"><button className="dark-button" onClick={() => goPage("tools")}>Начать сейчас <ArrowRight size={17}/></button><button className="glass-button" onClick={() => goPage("tracks")}>Смотреть чарт <Play size={13} fill="currentColor"/></button></div><div className="hero-stats"><div><b>5K+</b><span>создано треков</span></div><div><b>98%</b><span>довольных авторов</span></div><div><b>∞</b><span>без границ</span></div></div></div><div className="hero-orb"><div className="orb-ring r1"/><div className="orb-ring r2"/><div className="orb-core"><Sparkles size={30}/><b>SØNA</b><span>MUSIC INTELLIGENCE</span></div><div className="hero-float-card"><span>LIVE</span><b>AI MUSIC<br/>ENGINE</b><small>SONGWRITER · ANALYZER · MASTER</small></div></div></section><section className="quick-grid">{[["01","AI Songwriter","Идеи, тексты и структура"],["02","Audio Analyzer","Разбор звука и рекомендации"],["03","AI Mastering","Финальный мастер за минуты"],["04","Trends","Тренды и референсы в онлайне"]].map(([n,t,d])=><button key={n} onClick={() => goPage("tools")}><span>{n}</span><div><b>{t}</b><small>{d}</small></div><ArrowRight size={16}/></button>)}</section></main>;
+function AccountModal({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<"register" | "login">("register"); const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState("");
+  function submit(e: React.FormEvent) { e.preventDefault(); setError(""); if (!email.includes("@") || password.length < 6 || (mode === "register" && name.trim().length < 2)) { setError(mode === "register" ? "Заполни имя, корректный email и пароль минимум из 6 символов." : "Проверь email и пароль."); return; } localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ name: name.trim() || email.split("@")[0], email, createdAt: new Date().toISOString() })); onClose(); }
+  return <div className="modal-backdrop" onMouseDown={e => e.currentTarget === e.target && onClose()}><div className="account-modal"><button className="modal-close" onClick={onClose} aria-label="Закрыть"><X size={18}/></button><div className="account-copy"><span className="sona-eyebrow">SØNA ACCOUNT</span><h2>{mode === "register" ? "Создай свой аккаунт" : "С возвращением"}</h2><p>{mode === "register" ? "Сохраняй проекты, тексты, анализы и историю работы в SØNA." : "Войди, чтобы продолжить работу с SØNA."}</p></div><form onSubmit={submit}>{mode === "register" && <label>Имя<input value={name} onChange={e => setName(e.target.value)} placeholder="Твоё имя" autoComplete="name"/></label>}<label>Email<input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="name@example.com" autoComplete="email"/></label><label>Пароль<input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Минимум 6 символов" autoComplete={mode === "register" ? "new-password" : "current-password"}/></label>{error && <div className="form-error">{error}</div>}<button className="dark-button account-submit" type="submit">{mode === "register" ? "Создать аккаунт" : "Войти"}<ArrowRight size={15}/></button></form><div className="account-switch">{mode === "register" ? "Уже есть аккаунт?" : "Нет аккаунта?"}<button onClick={() => { setMode(mode === "register" ? "login" : "register"); setError(""); }}>{mode === "register" ? "Войти" : "Зарегистрироваться"}</button></div><div className="account-note">Продолжая, ты принимаешь условия использования SØNA.</div></div></div>;
 }
 
+function SupportChat() {
+  const [open, setOpen] = useState(false); const [message, setMessage] = useState(""); const [messages, setMessages] = useState([{ from: "sona", text: "Привет. Я SØNA Assistant. Помогу разобраться с инструментами, треком, текстом или релизом." }]);
+  function send() { const text = message.trim(); if (!text) return; setMessages(prev => [...prev, { from: "user", text }, { from: "sona", text: "Понял. Открой AI Инструменты — там можно загрузить трек, получить анализ или начать работу над текстом. Если хочешь, напиши, что именно нужно сделать." }]); setMessage(""); }
+  return <div className={`support-chat ${open ? "is-open" : ""}`}><div className="support-panel"><div className="support-head"><div><b>SØNA Assistant</b><span><i/> online</span></div><button onClick={() => setOpen(false)}><X size={16}/></button></div><div className="support-messages">{messages.map((m, i) => <div className={`support-message ${m.from}`} key={i}>{m.text}</div>)}</div><div className="support-input"><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Напиши сообщение…"/><button onClick={send} aria-label="Отправить"><Send size={15}/></button></div></div><button className="support-trigger" onClick={() => setOpen(!open)} aria-label="Открыть чат"><Sparkles size={18}/><span>Чат SØNA</span></button></div>;
+}
+
+function Home() { return <main className="sona-home"><section className="sona-hero"><div className="hero-glass"><span className="sona-eyebrow">MUSIC · AI · CREATIVITY · NO LIMITS</span><h1>SØNA<br/><em>Music Intelligence</em></h1><h2>Создавай. Анализируй. Улучшай. Выпускай.</h2><p>Все инструменты для твоей музыки — в одном месте.</p><div className="hero-buttons"><button className="dark-button" onClick={() => goPage("tools")}>Начать сейчас <ArrowRight size={17}/></button><button className="glass-button" onClick={() => goPage("tracks")}>Смотреть чарт <Play size={13} fill="currentColor"/></button></div><div className="hero-stats"><div><b>5K+</b><span>создано треков</span></div><div><b>98%</b><span>довольных авторов</span></div><div><b>∞</b><span>без границ</span></div></div></div><div className="hero-orb"><div className="orb-ring r1"/><div className="orb-ring r2"/><div className="orb-core"><Sparkles size={30}/><b>SØNA</b><span>MUSIC INTELLIGENCE</span></div><div className="hero-float-card"><span>LIVE</span><b>AI MUSIC<br/>ENGINE</b><small>SONGWRITER · ANALYZER · MASTER</small></div></div></section><section className="quick-grid">{[["01","AI Songwriter","Идеи, тексты и структура"],["02","Audio Analyzer","Разбор звука и рекомендации"],["03","AI Mastering","Финальный мастер за минуты"],["04","Trends","Тренды и референсы в онлайне"]].map(([n,t,d])=><button key={n} onClick={() => goPage("tools")}><span>{n}</span><div><b>{t}</b><small>{d}</small></div><ArrowRight size={16}/></button>)}</section></main>; }
 function Projects() { return <section className="sona-section"><div className="section-intro"><div><span className="sona-eyebrow">YOUR WORKSPACE</span><h1>Проекты</h1><p>Идеи, версии, референсы и финальные мастера — собраны в одном стеклянном пространстве.</p></div><button className="dark-button">+ Новый проект</button></div><div className="project-grid">{projects.map(p => <article className={`project-card ${p.accent}`} key={p.name}><div className="project-art"><span>SØNA</span><b>{p.name}</b></div><div className="project-body"><div><strong>{p.name}</strong><small>{p.type}</small></div><span className="status-pill">{p.status}</span><p>{p.meta}</p><button onClick={() => goPage("tools")}>Открыть проект <ArrowRight size={14}/></button></div></article>)}</div></section>; }
-
 function Pricing() { return <section className="sona-section"><div className="section-intro"><div><span className="sona-eyebrow">SØNA PLANS</span><h1>Тарифы</h1><p>Выбери уровень AI-инструментов под свой объём работы.</p></div></div><div className="pricing-grid">{plans.map(plan => <article className={`price-card ${plan.featured ? "featured" : ""}`} key={plan.name}>{plan.featured && <span className="recommended">RECOMMENDED</span>}<span className="sona-eyebrow">{plan.name}</span><h2>{plan.price}</h2><p>{plan.note}</p><ul>{plan.features.map(x => <li key={x}><Check size={14}/>{x}</li>)}</ul><button className={plan.featured ? "dark-button" : "glass-button"}>{plan.name === "FREE" ? "Начать" : "Выбрать тариф"} <ArrowRight size={14}/></button></article>)}</div></section>; }
-
 function About() { return <section className="sona-section about-section"><span className="sona-eyebrow">ABOUT SØNA</span><h1>SØNA — Music Intelligence</h1><p>Единое AI-пространство для музыканта: от первой идеи и текста до анализа, мастеринга, трендов и готового релиза.</p><div className="about-glass"><b>Create.</b><b>Analyze.</b><b>Release.</b></div></section>; }
 
 export default function SonaPublic() {
   const getPage = (): Page => { const path = window.location.pathname.replace(/\/+$/, "") || "/"; return (path === "/" ? "home" : path.slice(1)) as Page; };
-  const [page, setPage] = useState<Page>(getPage);
+  const [page, setPage] = useState<Page>(getPage); const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => { const onPop = () => setPage(getPage()); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => { if (page === "tools") { const timer = window.setTimeout(() => { const button = Array.from(document.querySelectorAll(".sona-tools-embed .nav button")).find(x => x.textContent?.trim() === "AI Инструменты"); (button as HTMLButtonElement | undefined)?.click(); }, 50); return () => window.clearTimeout(timer); } }, [page]);
   const content = useMemo(() => page === "home" ? <Home/> : page === "tracks" ? <Chart/> : page === "projects" ? <Projects/> : page === "pricing" ? <Pricing/> : page === "about" ? <About/> : <div className="sona-tools-embed"><ExistingApp/></div>, [page]);
-  return <div className="sona-app"><PublicHeader page={page}/>{content}<footer className="sona-footer"><div><b>SØNA</b><span>MUSIC INTELLIGENCE</span></div><p>Create. Analyze. Release.</p><div><button onClick={() => goPage("about")}>О SØNA</button><button onClick={() => goPage("pricing")}>Тарифы</button><button onClick={() => goPage("tracks")}>Чарт</button></div></footer></div>;
+  return <div className="sona-app"><PublicHeader page={page} onAccount={() => setAccountOpen(true)}/>{content}<footer className="sona-footer"><div><b>SØNA</b><span>MUSIC INTELLIGENCE</span></div><p>Create. Analyze. Release.</p><div><button onClick={() => goPage("about")}>О SØNA</button><button onClick={() => goPage("pricing")}>Тарифы</button><button onClick={() => goPage("tracks")}>Чарт</button></div></footer><SupportChat/>{accountOpen && <AccountModal onClose={() => setAccountOpen(false)}/>}</div>;
 }
