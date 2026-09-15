@@ -4,15 +4,32 @@ from agents import router
 from agents.skill_loader import load
 from agents.tools import execute_tool, list_tools
 from agents.tools.base import ToolError
+from agents.tools.registry import get_tool_specs
 
 
 class FakeProvider:
     def __init__(self):
         self.calls = []
+        self.tool_calls = []
 
     def generate(self, *, system, messages):
         self.calls.append((system, messages))
         return "TEST_OK"
+
+    def generate_with_tools(self, *, system, messages, tools, execute_tool, max_rounds):
+        self.calls.append((system, messages, tools, max_rounds))
+        self.tool_calls.append(tools)
+        self.assert_tool = execute_tool
+        result = execute_tool(
+            "music.analyze_mix",
+            {
+                "analysis": {"crest_factor_db": 6.0},
+                "decisions": [],
+                "master_report": {},
+            },
+        )
+        self.last_tool_result = result
+        return "TEST_TOOL_OK", [{"name": "music.analyze_mix", "status": "ok"}]
 
 
 class AgentRuntimeTests(unittest.TestCase):
@@ -68,6 +85,31 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("Сделай короткий припев", prompt)
         self.assertIn("SØNA SKILL INSTRUCTIONS", prompt)
 
+    def test_invoke_routes_configured_tools_to_provider(self):
+        result = router.invoke(
+            "assistant",
+            "Проанализируй текущие результаты микса и дай рекомендации",
+            context={"analysis": {"crest_factor_db": 6.0}},
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["answer"], "TEST_TOOL_OK")
+        self.assertEqual(result["tool_calls"], [{"name": "music.analyze_mix", "status": "ok"}])
+        exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
+        self.assertEqual(exposed, {"music.analyze_mix", "music.build_advice"})
+        self.assertIn("problems", self.fake.last_tool_result)
+
+    def test_unconfigured_agent_keeps_legacy_provider_path(self):
+        result = router.invoke("songwriter", "Напиши хук")
+        self.assertTrue(result["ok"])
+        self.assertNotIn("tool_calls", result)
+        self.assertEqual(result["answer"], "TEST_OK")
+
+    def test_music_tool_schema_is_responses_compatible(self):
+        specs = get_tool_specs(["music.analyze_mix", "music.build_advice"])
+        self.assertEqual({item["type"] for item in specs}, {"function"})
+        self.assertTrue(all(item["strict"] for item in specs))
+        self.assertTrue(all("parameters" in item for item in specs))
+
     def test_invoke_supports_prompts_chat_provider(self):
         original_search = router.search_prompts
         router.search_prompts = lambda message, limit=4: [
@@ -109,6 +151,10 @@ class AgentRuntimeTests(unittest.TestCase):
     def test_unknown_tool_is_rejected(self):
         with self.assertRaises(ToolError):
             execute_tool("python.exec", {})
+
+    def test_unknown_configured_tool_is_rejected(self):
+        with self.assertRaises(ToolError):
+            get_tool_specs(["python.exec"])
 
     def test_unknown_agent_is_rejected(self):
         with self.assertRaises(router.AgentError):
