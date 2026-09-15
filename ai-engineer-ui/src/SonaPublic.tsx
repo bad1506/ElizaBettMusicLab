@@ -7,8 +7,7 @@ type Page = "home" | "tools" | "tracks" | "projects" | "pricing" | "about";
 type ChartTrack = { position: number; title: string; artist: string; cover?: string; url?: string; listeners?: number; shift?: number };
 
 const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || "https://t.me/ElizaBettMusicLabBot?startapp";
-const YANDEX_CHART = "https://api.music.yandex.net/landing3/chart/russia";
-const YANDEX_PROXY = "https://yandex-music-cors-proxy.onrender.com/https://api.music.yandex.net:443/landing3/chart/russia";
+const YANDEX_CHART = "/api/public/yandex-chart";
 
 const nav = [
   ["Главная", "home"], ["AI Инструменты", "tools"], ["Треки", "tracks"],
@@ -54,8 +53,7 @@ function Chart() {
   async function load() {
     setLoading(true); setError("");
     try {
-      let response = await fetch(YANDEX_CHART, { headers: { "X-Yandex-Music-Device": "os=unknown; os_version=unknown; manufacturer=unknown; model=unknown; clid=; device_id=unknown; uuid=unknown" } });
-      if (!response.ok) response = await fetch(YANDEX_PROXY);
+      const response = await fetch(YANDEX_CHART, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const next = normalizeChart(data);
