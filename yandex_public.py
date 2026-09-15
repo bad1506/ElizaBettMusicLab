@@ -1,8 +1,9 @@
 """Public Yandex Music chart adapter for SØNA.
 
-The Yandex endpoint is public chart data but can vary by region/network. We keep a
-small server-side cache and try the documented API first, then its known public
-CORS proxy, so the website does not depend on a user's browser region.
+Yandex exposes the public chart through landing3 endpoints. SØNA tries the
+specific Russia chart first and the landing3 chart block as a compatibility
+fallback, keeping a short server-side cache so the public site does not depend
+on browser CORS or a user's Yandex session.
 """
 from __future__ import annotations
 
@@ -17,8 +18,12 @@ from urllib.request import Request, urlopen
 from fastapi import HTTPException
 
 CACHE_TTL = 10 * 60
-PRIMARY = "https://api.music.yandex.net/landing3/chart/russia"
-PROXY = "https://yandex-music-cors-proxy.onrender.com/https://api.music.yandex.net:443/landing3/chart/russia"
+UPSTREAMS = (
+    "https://api.music.yandex.net/landing3/chart/russia",
+    "https://api.music.yandex.net/landing3?blocks=chart",
+    "https://yandex-music-cors-proxy.onrender.com/https://api.music.yandex.net:443/landing3/chart/russia",
+    "https://yandex-music-cors-proxy.onrender.com/https://api.music.yandex.net:443/landing3?blocks=chart",
+)
 
 
 def _cache_file() -> Path:
@@ -55,18 +60,45 @@ def _save_cache(payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def _track_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        for key in ("tracks", "items", "chart", "playlist"):
+            found = _track_list(value.get(key))
+            if found:
+                return found
+    return []
+
+
 def _normalize(payload: dict[str, Any]) -> dict[str, Any]:
     """Expose a stable SØNA shape while retaining the raw Yandex payload."""
     root = payload.get("result", payload)
-    chart_info = root.get("chart") if isinstance(root, dict) else None
-    tracks = []
-    if isinstance(chart_info, dict):
-        tracks = chart_info.get("tracks") or []
-        if not tracks and isinstance(chart_info.get("chart"), dict):
-            tracks = chart_info["chart"].get("tracks") or []
+    tracks: list[Any] = []
+    if isinstance(root, dict):
+        tracks = _track_list(root.get("chart"))
+        if not tracks:
+            tracks = _track_list(root.get("blocks"))
+        if not tracks:
+            tracks = _track_list(root.get("items"))
+        if not tracks:
+            tracks = _track_list(root.get("tracks"))
+
+    # landing3 can wrap the chart in a block object; search one level deeper.
     if not tracks and isinstance(root, dict):
-        tracks = root.get("tracks") or root.get("items") or []
-    return {"ok": True, "source": "Yandex Music", "updated_at": int(time.time()), "items": tracks[:50], "result": payload.get("result", payload)}
+        for value in root.values():
+            candidate = _track_list(value)
+            if candidate and any(isinstance(item, dict) and (item.get("track") or item.get("title")) for item in candidate):
+                tracks = candidate
+                break
+
+    return {
+        "ok": True,
+        "source": "Yandex Music",
+        "updated_at": int(time.time()),
+        "items": tracks[:50],
+        "result": payload.get("result", payload),
+    }
 
 
 def register_yandex_chart(app) -> None:
@@ -78,7 +110,7 @@ def register_yandex_chart(app) -> None:
             return _normalize(cache["payload"])
 
         last_error: Exception | None = None
-        for upstream in (PRIMARY, PROXY):
+        for upstream in UPSTREAMS:
             try:
                 payload = _request(upstream)
                 normalized = _normalize(payload)
