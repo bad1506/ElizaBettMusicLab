@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 import telegram_auth
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-_PUBLIC_PATHS = {"/", "/health", "/auth/telegram"}
+_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/public/yandex-chart"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock()
 _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
