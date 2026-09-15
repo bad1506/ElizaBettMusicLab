@@ -22,7 +22,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
-  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends' || path === '/api/sona-chat' || path === '/api/agents/skills'
+  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends' || path === '/api/agents/skills'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
