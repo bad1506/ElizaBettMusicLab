@@ -54,6 +54,8 @@ jobs:
           python-version: "3.11"
       - name: Compile all Python modules
         run: python -m compileall -q .
+      - name: Run agent runtime tests
+        run: python -m unittest discover -s tests/agents -p 'test_*.py' -v
       - name: Validate FastAPI route declarations
         run: |
           python - <<'PY'
