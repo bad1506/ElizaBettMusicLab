@@ -19,10 +19,11 @@ if (telegram) { telegram.ready?.(); telegram.expand?.(); telegram.setHeaderColor
 const originalFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  const path = (() => { try { return new URL(url, window.location.origin).pathname } catch { return url } })()
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
-  const isPublicRequest = url.includes('/auth/register') || url.includes('/auth/login') || url.includes('/auth/telegram') || url.includes('/public/yandex-chart') || url.includes('/health') || url.includes('/songwriter')
+  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
