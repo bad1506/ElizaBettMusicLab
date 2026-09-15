@@ -1,0 +1,7 @@
+/* SØVA brand layer — keeps the product UI architecture unchanged while applying the new identity. */
+.brand b,.footer-brand b{font-size:0!important;letter-spacing:0!important}
+.brand b::after{content:'SØVA';font:italic 29px 'Playfair Display',Georgia,serif;letter-spacing:-.055em}
+.brand span,.footer-brand span{font-size:0!important;letter-spacing:0!important}
+.brand span::after{content:'MUSIC INTELLIGENCE';font:500 7px 'DM Sans',Arial,sans-serif;letter-spacing:.31em;color:#333}
+.footer-brand b::after{content:'SØVA';font:italic 20px 'Playfair Display',Georgia,serif;letter-spacing:-.05em}
+.footer-brand span::after{content:'MUSIC INTELLIGENCE';font:500 5px 'DM Sans',Arial,sans-serif;letter-spacing:.32em;color:#333}
