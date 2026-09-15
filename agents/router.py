@@ -100,6 +100,20 @@ def _public_music_report(report: dict[str, Any]) -> dict[str, Any]:
     return {key: report[key] for key in allowed if key in report}
 
 
+def _public_music_action_report(tool_name: str, report: dict[str, Any]) -> dict[str, Any]:
+    """Безопасный структурированный результат специализированного music tool."""
+    if tool_name == "music.diagnose_vocal_in_section":
+        allowed = {
+            "status", "file", "section", "section_selection", "vocal", "metrics",
+            "diagnosis", "recommended_order", "limitations",
+        }
+    elif tool_name in {"music.analyze_mix", "music.build_advice"}:
+        allowed = {"status", "file", "summary", "issues", "recommendations", "priority_order", "limitations"}
+    else:
+        allowed = {"status", "file", "summary", "issues", "recommendations", "priority_order", "limitations"}
+    return {key: report[key] for key in allowed if key in report}
+
+
 def invoke(
     agent_name: str,
     message: str,
@@ -192,15 +206,21 @@ def invoke(
     )
 
     captured_music_report: dict[str, Any] | None = None
+    captured_action_report: dict[str, Any] | None = None
+    captured_action_tool: str | None = None
     try:
         if tool_specs:
             def _execute_allowed(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-                nonlocal captured_music_report
+                nonlocal captured_music_report, captured_action_report, captured_action_tool
                 if name not in tool_names:
                     raise ToolError("Tool is not allowed for this agent")
                 result = execute_tool(name, arguments)
-                if name == "music.get_current_intelligence_report" and isinstance(result, dict):
-                    captured_music_report = _public_music_report(result)
+                if isinstance(result, dict):
+                    if name == "music.get_current_intelligence_report":
+                        captured_music_report = _public_music_report(result)
+                    elif name in {"music.diagnose_vocal_in_section", "music.analyze_mix", "music.build_advice"}:
+                        captured_action_report = _public_music_action_report(name, result)
+                        captured_action_tool = name
                 return result
 
             answer, tool_calls = provider.generate_with_tools(
@@ -231,6 +251,9 @@ def invoke(
             result["tool_calls"] = tool_calls
         if captured_music_report is not None:
             result["music_report"] = captured_music_report
+        if captured_action_report is not None:
+            result["music_action_report"] = captured_action_report
+            result["music_action_tool"] = captured_action_tool
         _write_log({
             "event": "agent_call",
             "agent": agent_name,
