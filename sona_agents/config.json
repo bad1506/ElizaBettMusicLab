@@ -5,12 +5,12 @@
     "sona-assistant": {
       "description": "Основной музыкальный AI-ассистент SØNA.",
       "default_skill": "assistant",
-      "skills": ["assistant", "songwriter", "audio-analysis", "mastering", "trends", "analytics", "finance", "projects", "release-marketing"]
+      "skills": ["assistant", "songwriter", "songwriting-and-ai-music", "audio-analysis", "mastering", "trends", "analytics", "finance", "projects", "release-marketing"]
     },
     "sona-prompt-engineer": {
       "description": "Агент для улучшения и построения промптов.",
       "default_skill": "music-prompt-engineering",
-      "skills": ["music-prompt-engineering"]
+      "skills": ["music-prompt-engineering", "skill-creator"]
     }
   },
   "sources": {
@@ -32,6 +32,7 @@
     }
   },
   "routing": {
+    "songwriting-and-ai-music": ["suno", "suno prompt", "ai music", "музыкальный промпт"],
     "songwriter": ["песня", "трек", "припев", "куплет", "хук", "лирика", "текст песни"],
     "audio-analysis": ["анализ аудио", "lufs", "true peak", "микс", "спектр", "динамика"],
     "mastering": ["мастеринг", "мастер", "лимитер", "ceiling", "громкость"],
