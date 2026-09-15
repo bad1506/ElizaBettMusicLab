@@ -4,22 +4,56 @@ import logging
 from typing import Any
 
 from .base import ToolError, ToolSpec
-from .music import analyze_mix, build_mix_advice, get_current_music_analysis
+from .music import (
+    analyze_mix,
+    build_mix_advice,
+    get_current_intelligence,
+    get_current_melody_map,
+    get_current_music_analysis,
+    get_current_timeline,
+    get_current_vocal_context,
+)
 
 LOGGER = logging.getLogger("sona.agents.tools")
 
 
+_EMPTY_INPUT = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
+
+def _tool(name: str, description: str, handler) -> ToolSpec:
+    return ToolSpec(name=name, description=description, input_schema=_EMPTY_INPUT, handler=handler)
+
+
 _TOOLS = {
-    "music.get_current_analysis": ToolSpec(
-        name="music.get_current_analysis",
-        description="Получает актуальный read-only /analysis последнего аудиофайла текущего пользователя, включая timeline, intelligence, decisions и master brain.",
-        input_schema={
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False,
-        },
-        handler=get_current_music_analysis,
+    "music.get_current_analysis": _tool(
+        "music.get_current_analysis",
+        "Получает актуальный read-only /analysis последнего аудиофайла текущего пользователя, включая timeline, intelligence, decisions и master brain.",
+        get_current_music_analysis,
+    ),
+    "music.get_current_timeline": _tool(
+        "music.get_current_timeline",
+        "Получает waveform и сегментный loudness timeline текущего аудиотрека пользователя; только чтение.",
+        get_current_timeline,
+    ),
+    "music.get_current_intelligence": _tool(
+        "music.get_current_intelligence",
+        "Получает сегментный spectral, stereo, transient и vocal intelligence текущего аудиотрека; только чтение.",
+        get_current_intelligence,
+    ),
+    "music.get_current_vocal_context": _tool(
+        "music.get_current_vocal_context",
+        "Получает tempo, key, структурные секции и vocal activity текущего трека; только чтение.",
+        get_current_vocal_context,
+    ),
+    "music.get_current_melody_map": _tool(
+        "music.get_current_melody_map",
+        "Получает оценочную melody map текущего трека для анализа мелодии и вокальной линии; только чтение.",
+        get_current_melody_map,
     ),
     "music.analyze_mix": ToolSpec(
         name="music.analyze_mix",
