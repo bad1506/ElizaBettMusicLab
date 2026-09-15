@@ -81,6 +81,8 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
         "sources": result.get("sources", []),
         "tool_calls": result.get("tool_calls", []),
         "music_report": result.get("music_report"),
+        "music_action_report": result.get("music_action_report"),
+        "music_action_tool": result.get("music_action_tool"),
         "metadata": {
             "provider": result.get("provider"),
             "generated_at": datetime.now(timezone.utc).isoformat(),
