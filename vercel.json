@@ -7,6 +7,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://elizabettmusiclab-1.onrender.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
