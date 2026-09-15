@@ -5,6 +5,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/public/yandex-chart",
+      "destination": "https://yandex-music-cors-proxy.onrender.com/https://api.music.yandex.net:443/landing3/chart/russia"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://elizabettmusiclab-1.onrender.com/:path*"
     },
