@@ -5,12 +5,7 @@ import "./SonaAssistantChat.css";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 
-const initial: ChatMessage[] = [
-  {
-    role: "assistant",
-    text: "Привет. Я SØNA Assistant. Здесь можно просто общаться со мной: придумать песню, разобрать идею, помочь с текстом, релизом, продвижением или разобраться с любым вопросом по SØNA.",
-  },
-];
+const initial: ChatMessage[] = [{ role: "assistant", text: "Привет. Я SØNA Assistant. Здесь можно просто общаться со мной: придумать песню, разобрать идею, помочь с текстом, релизом, продвижением или разобраться с любым вопросом по SØNA." }];
 
 export default function SonaAssistantChat() {
   const [open, setOpen] = useState(false);
@@ -28,10 +23,11 @@ export default function SonaAssistantChat() {
     setInput("");
     setBusy(true);
     try {
-      const response = await fetch("/api/chat", {
+      const token = localStorage.getItem("sona_token");
+      const response = await fetch("/api/sona-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history, context: { product: "SØNA", language: "ru" } }),
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ message: text, history, context: { product: "SØNA", language: "ru", client: "web" } }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.detail || "Не удалось получить ответ");
@@ -48,10 +44,7 @@ export default function SonaAssistantChat() {
       {open && (
         <section className="sona-chat-panel" aria-label="SØNA Assistant">
           <header className="sona-chat-header">
-            <div className="sona-chat-identity">
-              <div className="sona-chat-icon"><Bot size={19} /></div>
-              <div><strong>SØNA Assistant</strong><span><i /> online</span></div>
-            </div>
+            <div className="sona-chat-identity"><div className="sona-chat-icon"><Bot size={19} /></div><div><strong>SØNA Assistant</strong><span><i /> online</span></div></div>
             <button className="sona-chat-close" onClick={() => setOpen(false)} aria-label="Закрыть"><X size={18} /></button>
           </header>
           <div className="sona-chat-messages">
@@ -62,7 +55,7 @@ export default function SonaAssistantChat() {
             <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Напиши сообщение…" aria-label="Сообщение" autoFocus />
             <button type="submit" disabled={!canSend} aria-label="Отправить"><ArrowUp size={17} /></button>
           </form>
-          <div className="sona-chat-hint">SØNA может помочь с музыкой, текстом, анализом и идеями.</div>
+          <div className="sona-chat-hint">SØNA — твой AI-помощник для музыки, идей и работы над релизом.</div>
         </section>
       )}
       {!open && <button className="sona-chat-trigger" onClick={() => setOpen(true)}><Sparkles size={18} /><span>Чат SØNA</span></button>}
