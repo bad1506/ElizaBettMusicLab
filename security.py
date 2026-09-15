@@ -12,9 +12,10 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 import telegram_auth
+import web_auth
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/public/yandex-chart"}
+_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock()
 _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
@@ -63,11 +64,10 @@ def security_middleware(app):
 
         if path not in _PUBLIC_PATHS:
             init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
-            # Local unauthenticated mode is opt-in for development only.
-            # Production defaults to strict Telegram authentication.
+            web_token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "false").lower() == "true"
-            if not init_data and not (allow_local and is_local_request(request)):
-                return JSONResponse({"detail": "Telegram authentication required"}, status_code=401)
+            if not init_data and not web_token and not (allow_local and is_local_request(request)):
+                return JSONResponse({"detail": "Authentication required"}, status_code=401)
             if init_data:
                 try:
                     max_age = int(os.getenv("TELEGRAM_INIT_DATA_MAX_AGE", "3600"))
@@ -75,6 +75,11 @@ def security_middleware(app):
                     token = CURRENT_USER.set(data.get("user") or {})
                 except telegram_auth.TelegramAuthError:
                     return JSONResponse({"detail": "Invalid or expired Telegram authentication"}, status_code=401)
+            elif web_token:
+                user = web_auth.get_user(web_token)
+                if not user:
+                    return JSONResponse({"detail": "Invalid or expired account session"}, status_code=401)
+                token = CURRENT_USER.set({"id": user["id"], "first_name": user["name"], "last_name": "", "username": user["email"]})
             else:
                 token = CURRENT_USER.set({"id": "local", "first_name": "Local"})
 
@@ -124,14 +129,7 @@ def user_storage(base: Path) -> dict[str, Path]:
     raw = current_user_id()
     safe_id = "".join(ch for ch in raw if ch.isalnum() or ch in "-_")[:80] or "local"
     root = base / "user_data" / safe_id
-    dirs = {
-        "root": root,
-        "input": root / "mastering_input",
-        "output": root / "optimizer_output",
-        "separated": root / "separated",
-        "reference": root / "reference",
-        "project": root / "project_data",
-    }
+    dirs = {"root": root, "input": root / "mastering_input", "output": root / "optimizer_output", "separated": root / "separated", "reference": root / "reference", "project": root / "project_data"}
     for directory in dirs.values():
         directory.mkdir(parents=True, exist_ok=True)
     return dirs
