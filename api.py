@@ -7,6 +7,8 @@ from api_secure import app
 import chat_api
 import web_auth
 import yandex_public
+from agents.router import AgentError, invoke as invoke_agent, list_agents
+import security
 
 # The web application is the primary client. Telegram remains optional.
 chat_api.register(app)
@@ -23,6 +25,12 @@ class ActivityRequest(BaseModel):
     kind: str = Field(default="activity", max_length=40)
     title: str = Field(min_length=1, max_length=160)
     detail: str = Field(default="", max_length=1000)
+
+class AgentRequest(BaseModel):
+    agent: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=12000)
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=30)
+    context: dict = Field(default_factory=dict)
 
 
 def _token(request: FastAPIRequest) -> str:
@@ -76,5 +84,24 @@ def auth_history_add(request: FastAPIRequest, activity: ActivityRequest):
         raise HTTPException(401, "Invalid or expired account session")
     web_auth.add_activity(user["id"], activity.kind, activity.title, activity.detail)
     return {"ok": True}
+
+@app.get("/agents")
+def agents_catalog():
+    """Каталог доступен клиенту; выполнение agent требует обычной авторизации middleware."""
+    return {"ok": True, "agents": list_agents()}
+
+@app.post("/agents/invoke")
+def agents_invoke(request: AgentRequest):
+    try:
+        result = invoke_agent(
+            request.agent,
+            request.message,
+            history=request.history,
+            context=request.context,
+            user_id=security.current_user_id(),
+        )
+        return result
+    except AgentError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 __all__ = ["app"]
