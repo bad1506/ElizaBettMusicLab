@@ -5,6 +5,7 @@ import './glass-interactions.css'
 import './SonaAssistantChat.css'
 import './SonaSferoomChat.css'
 import './sona-cursor-glow.css'
+import './SonaAbout.css'
 import SonaPublic from './SonaPublic.tsx'
 import SonaSferoomChat from './SonaSferoomChat.tsx'
 
@@ -28,7 +29,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   return originalFetch(input, { ...init, headers })
 }
 if (initData) {
-  originalFetch(`${api}/auth/telegram`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData }) }).then(async r => r.ok ? r.json() : null).then(data => { if (data?.authenticated && data?.user) { sessionStorage.setItem('sova_telegram_user', JSON.stringify(data.user)); window.dispatchEvent(new CustomEvent('sona:telegram-auth', { detail: data.user })) } }).catch(() => undefined)
+  originalFetch(`${api}/auth/telegram`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData }) }).then(async r => r.ok ? r.json() : null).then(data => { if (data?.authenticated && data?.user) { sessionStorage.setItem('sona_telegram_user', JSON.stringify(data.user)); window.dispatchEvent(new CustomEvent('sona:telegram-auth', { detail: data.user })) } }).catch(() => undefined)
 }
 function CursorGlow() {
   useEffect(() => {
