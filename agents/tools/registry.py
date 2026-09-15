@@ -4,12 +4,23 @@ import logging
 from typing import Any
 
 from .base import ToolError, ToolSpec
-from .music import analyze_mix, build_mix_advice
+from .music import analyze_mix, build_mix_advice, get_current_music_analysis
 
 LOGGER = logging.getLogger("sona.agents.tools")
 
 
 _TOOLS = {
+    "music.get_current_analysis": ToolSpec(
+        name="music.get_current_analysis",
+        description="Получает актуальный read-only /analysis последнего аудиофайла текущего пользователя, включая timeline, intelligence, decisions и master brain.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        handler=get_current_music_analysis,
+    ),
     "music.analyze_mix": ToolSpec(
         name="music.analyze_mix",
         description="Структурирует результаты анализа микса, проблемы и приоритеты обработки.",
