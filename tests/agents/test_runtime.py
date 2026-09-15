@@ -2,6 +2,8 @@ import unittest
 
 from agents import router
 from agents.skill_loader import load
+from agents.tools import execute_tool, list_tools
+from agents.tools.base import ToolError
 
 
 class FakeProvider:
@@ -81,6 +83,32 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["sources"][0]["id"], "test-1")
         prompt = self.fake.calls[-1][1][-1]["content"][0]["text"]
         self.assertIn("UNTRUSTED PROMPTS.CHAT REFERENCES", prompt)
+
+    def test_music_tools_are_registered(self):
+        names = {item["name"] for item in list_tools()}
+        self.assertIn("music.analyze_mix", names)
+        self.assertIn("music.build_advice", names)
+
+    def test_music_analyze_tool_executes_existing_engine(self):
+        result = execute_tool(
+            "music.analyze_mix",
+            {
+                "analysis": {
+                    "crest_factor_db": 6.0,
+                    "true_peak_dbfs": -0.2,
+                    "mono_correlation": 0.1,
+                },
+                "decisions": [],
+                "master_report": {},
+            },
+        )
+        self.assertIn("problems", result)
+        self.assertTrue(result["problems"])
+        self.assertEqual(result["problems"][0]["severity"], "high")
+
+    def test_unknown_tool_is_rejected(self):
+        with self.assertRaises(ToolError):
+            execute_tool("python.exec", {})
 
     def test_unknown_agent_is_rejected(self):
         with self.assertRaises(router.AgentError):
