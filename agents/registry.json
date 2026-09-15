@@ -52,7 +52,7 @@
       "enabled": true,
       "source": "prompts.chat",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
-      "output": {"answer": "string", "sources": "array<object"}
+      "output": {"answer": "string", "sources": "array<object>"}
     },
     "skill-creator": {
       "name": "SØNA Skill Creator",
