@@ -21,16 +21,24 @@ class FakeProvider:
         self.calls.append((system, messages, tools, max_rounds))
         self.tool_calls.append(tools)
         self.assert_tool = execute_tool
-        result = execute_tool(
-            "music.analyze_mix",
-            {
-                "analysis": {"crest_factor_db": 6.0},
-                "decisions": [],
-                "master_report": {},
-            },
-        )
-        self.last_tool_result = result
-        return "TEST_TOOL_OK", [{"name": "music.analyze_mix", "status": "ok"}]
+        available = {tool["name"] for tool in tools}
+        if "music.get_current_analysis" in available:
+            result = execute_tool("music.get_current_analysis", {})
+            self.last_tool_result = result
+            called_name = "music.get_current_analysis"
+        else:
+            result = execute_tool(
+                "music.analyze_mix",
+                {
+                    "analysis": {"crest_factor_db": 6.0},
+                    "decisions": [],
+                    "master_report": {},
+                },
+            )
+            self.last_tool_result = result
+            called_name = "music.analyze_mix"
+        self.tool_call_name = called_name
+        return "TEST_TOOL_OK", [{"name": called_name, "status": "ok"}]
 
 
 class AgentRuntimeTests(unittest.TestCase):
@@ -94,32 +102,44 @@ class AgentRuntimeTests(unittest.TestCase):
         )
         self.assertTrue(result["ok"])
         self.assertEqual(result["answer"], "TEST_TOOL_OK")
-        self.assertEqual(result["tool_calls"], [{"name": "music.analyze_mix", "status": "ok"}])
+        self.assertEqual(result["tool_calls"], [{"name": "music.get_current_analysis", "status": "ok"}])
         exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
-        self.assertEqual(exposed, {"music.analyze_mix", "music.build_advice"})
-        self.assertIn("problems", self.fake.last_tool_result)
+        self.assertEqual(
+            exposed,
+            {"music.get_current_analysis", "music.analyze_mix", "music.build_advice"},
+        )
+        self.assertEqual(self.fake.last_tool_result["status"], "no_audio")
 
-    @patch("agents.router.current_analysis")
-    def test_tool_enabled_agent_receives_current_analysis(self, current_analysis_mock):
+    @patch("agents.tools.music.current_analysis")
+    def test_current_analysis_tool_returns_latest_analysis(self, current_analysis_mock):
         current_analysis_mock.return_value = {
             "status": "ok",
             "file": "track.wav",
-            "analysis": {"lufs": -9.5, "true_peak_dbfs": -0.8},
+            "analysis": {
+                "timeline": {"segments": [{"start": 0, "end": 5}]},
+                "intelligence": {"findings": []},
+                "decisions": [],
+                "master_brain": {"summary": "test"},
+            },
         }
-        result = router.invoke("assistant", "Проверь мой текущий микс")
-        self.assertTrue(result["ok"])
-        prompt = self.fake.calls[-1][1][-1]["content"][0]["text"]
-        self.assertIn("CURRENT USER MUSIC ANALYSIS", prompt)
-        self.assertIn("track.wav", prompt)
-        self.assertIn("-9.5", prompt)
+        result = execute_tool("music.get_current_analysis", {})
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["file"], "track.wav")
+        self.assertIn("timeline", result["analysis"])
+        self.assertIn("intelligence", result["analysis"])
         current_analysis_mock.assert_called_once()
 
-    @patch("agents.router.current_analysis", return_value=None)
-    def test_missing_audio_does_not_break_tool_agent(self, current_analysis_mock):
-        result = router.invoke("assistant", "Что можешь сделать?")
+    @patch("agents.tools.music.current_analysis", return_value=None)
+    def test_current_analysis_tool_handles_missing_audio(self, current_analysis_mock):
+        result = execute_tool("music.get_current_analysis", {})
+        self.assertEqual(result["status"], "no_audio")
+        current_analysis_mock.assert_called_once()
+
+    def test_tool_enabled_agent_does_not_preload_expensive_analysis(self):
+        with patch("agents.router.current_analysis", side_effect=AssertionError("router must not preload analysis"), create=True):
+            result = router.invoke("assistant", "Что можешь сделать?")
         self.assertTrue(result["ok"])
         self.assertEqual(result["answer"], "TEST_TOOL_OK")
-        current_analysis_mock.assert_called_once()
 
     def test_unconfigured_agent_keeps_legacy_provider_path(self):
         result = router.invoke("songwriter", "Напиши хук")
@@ -128,10 +148,13 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["answer"], "TEST_OK")
 
     def test_music_tool_schema_is_responses_compatible(self):
-        specs = get_tool_specs(["music.analyze_mix", "music.build_advice"])
+        specs = get_tool_specs(["music.get_current_analysis", "music.analyze_mix", "music.build_advice"])
         self.assertEqual({item["type"] for item in specs}, {"function"})
         self.assertTrue(all(item["strict"] for item in specs))
         self.assertTrue(all("parameters" in item for item in specs))
+        current = next(item for item in specs if item["name"] == "music.get_current_analysis")
+        self.assertEqual(current["parameters"]["properties"], {})
+        self.assertEqual(current["parameters"]["required"], [])
 
     def test_invoke_supports_prompts_chat_provider(self):
         original_search = router.search_prompts
@@ -151,6 +174,7 @@ class AgentRuntimeTests(unittest.TestCase):
 
     def test_music_tools_are_registered(self):
         names = {item["name"] for item in list_tools()}
+        self.assertIn("music.get_current_analysis", names)
         self.assertIn("music.analyze_mix", names)
         self.assertIn("music.build_advice", names)
 
