@@ -48,7 +48,16 @@ def validate_init_data(init_data: str, max_age: int = 86400) -> dict[str, Any]:
             user = json.loads(fields["user"])
         except json.JSONDecodeError as exc:
             raise TelegramAuthError("Invalid Telegram user data") from exc
-    if user and not user.get("id"):
+
+    # Protected API access must always map to a real Telegram user.
+    # A signed initData payload without user.id must never fall back to shared
+    # local storage or the synthetic "local" identity.
+    if not user or not user.get("id"):
         raise TelegramAuthError("Telegram user id is missing")
 
-    return {"user": user, "auth_date": auth_date, "query_id": fields.get("query_id"), "start_param": fields.get("start_param")}
+    return {
+        "user": user,
+        "auth_date": auth_date,
+        "query_id": fields.get("query_id"),
+        "start_param": fields.get("start_param"),
+    }
