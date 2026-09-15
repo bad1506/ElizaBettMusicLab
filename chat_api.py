@@ -80,6 +80,7 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
         "skill": result["skill"],
         "sources": result.get("sources", []),
         "tool_calls": result.get("tool_calls", []),
+        "music_report": result.get("music_report"),
         "metadata": {
             "provider": result.get("provider"),
             "generated_at": datetime.now(timezone.utc).isoformat(),
