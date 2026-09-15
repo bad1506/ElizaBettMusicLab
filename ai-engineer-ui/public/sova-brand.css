@@ -1,7 +1,42 @@
-/* SØVA brand layer — keeps the product UI architecture unchanged while applying the new identity. */
+/* SØNA brand layer — liquid glass identity and tactile motion. */
 .brand b,.footer-brand b{font-size:0!important;letter-spacing:0!important}
-.brand b::after{content:'SØVA';font:italic 29px 'Playfair Display',Georgia,serif;letter-spacing:-.055em}
+.brand b::after{content:'SØNA';font:italic 29px 'Playfair Display',Georgia,serif;letter-spacing:-.055em}
 .brand span,.footer-brand span{font-size:0!important;letter-spacing:0!important}
 .brand span::after{content:'MUSIC INTELLIGENCE';font:500 7px 'DM Sans',Arial,sans-serif;letter-spacing:.31em;color:#333}
-.footer-brand b::after{content:'SØVA';font:italic 20px 'Playfair Display',Georgia,serif;letter-spacing:-.05em}
+.footer-brand b::after{content:'SØNA';font:italic 20px 'Playfair Display',Georgia,serif;letter-spacing:-.05em}
 .footer-brand span::after{content:'MUSIC INTELLIGENCE';font:500 5px 'DM Sans',Arial,sans-serif;letter-spacing:.32em;color:#333}
+
+/* Every interactive surface gets a deliberate tactile response. */
+button,a,[role="button"]{
+  -webkit-tap-highlight-color:transparent;
+  transform:translateZ(0);
+  transition-property:transform,box-shadow,background-color,border-color,opacity,filter;
+  transition-duration:280ms;
+  transition-timing-function:cubic-bezier(.22,1,.36,1);
+}
+button:active,a:active,[role="button"]:active{transform:scale(.975)}
+button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid rgba(139,124,255,.55);outline-offset:3px}
+@media (hover:hover) and (pointer:fine){
+  button:not(:disabled):hover,a:hover,[role="button"]:hover{filter:saturate(1.06)}
+  .primary:hover,.telegram:hover{transform:translateY(-1px) scale(1.015);box-shadow:0 14px 30px rgba(70,60,90,.18),inset 0 1px rgba(255,255,255,.9)!important}
+  .secondary:hover,.nav button:hover{transform:translateY(-1px)}
+  .product-grid button:hover,.telegram-banner:hover,.projects-banner:hover,.track-card:hover,.trend-item:hover{transform:translateY(-3px)}
+}
+
+/* Glass highlight sweep on cards. */
+.product-grid button,.telegram-banner,.projects-banner,.track-card,.trend-item,.player-card,.primary,.secondary,.telegram,.nav{
+  position:relative;overflow:hidden;
+}
+.product-grid button::after,.telegram-banner::after,.projects-banner::after,.track-card::after,.trend-item::after,.player-card::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(110deg,transparent 25%,rgba(255,255,255,.36) 48%,transparent 68%);
+  transform:translateX(-125%);
+  transition:transform 720ms cubic-bezier(.22,1,.36,1);
+}
+@media (hover:hover) and (pointer:fine){
+  .product-grid button:hover::after,.telegram-banner:hover::after,.projects-banner:hover::after,.track-card:hover::after,.trend-item:hover::after,.player-card:hover::after{transform:translateX(125%)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
