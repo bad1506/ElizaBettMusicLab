@@ -13,7 +13,7 @@ import telegram_auth
 import web_auth
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart", "/sona-chat", "/agents/skills"}
+_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart", "/agents/skills"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock(); _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
@@ -37,8 +37,22 @@ def security_middleware(app):
         if request.method == "OPTIONS":
             response = await call_next(request); response.headers.setdefault("X-Content-Type-Options", "nosniff"); return response
         if path == "/sona-chat":
-            host = request.client.host if request.client else "unknown"
-            if not _rate_limit(f"chat-ip:{host}", 20): return JSONResponse({"detail": "Слишком много сообщений. Попробуйте через минуту."}, status_code=429, headers={"Retry-After": "60"})
+            init_data = request.headers.get("X-Telegram-Init-Data", "").strip(); web_token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+            if not init_data and not web_token:
+                allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "false").lower() == "true"
+                if not (allow_local and is_local_request(request)):
+                    return JSONResponse({"detail": "Authentication required"}, status_code=401)
+            elif init_data:
+                try: data = telegram_auth.validate_init_data(init_data, max_age=int(os.getenv("TELEGRAM_INIT_DATA_MAX_AGE", "3600"))); token = CURRENT_USER.set(data.get("user") or {})
+                except telegram_auth.TelegramAuthError: return JSONResponse({"detail": "Invalid or expired Telegram authentication"}, status_code=401)
+            else:
+                user = web_auth.get_user(web_token)
+                if not user: return JSONResponse({"detail": "Invalid or expired account session"}, status_code=401)
+                token = CURRENT_USER.set({"id": user["id"], "first_name": user["name"], "last_name": "", "username": user["email"]})
+            uid = current_user_id()
+            if not _rate_limit(f"{uid}:/sona-chat", 30):
+                if token: CURRENT_USER.reset(token)
+                return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429, headers={"Retry-After": "60"})
         elif path not in _PUBLIC_PATHS:
             init_data = request.headers.get("X-Telegram-Init-Data", "").strip(); web_token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip(); allow_local = os.getenv("ALLOW_LOCAL_UNAUTH", "false").lower() == "true"
             if not init_data and not web_token and not (allow_local and is_local_request(request)): return JSONResponse({"detail": "Authentication required"}, status_code=401)
