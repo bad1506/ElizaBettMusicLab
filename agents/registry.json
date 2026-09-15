@@ -1,12 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "agents": {
     "assistant": {
       "name": "SØNA Assistant",
       "description": "Основной музыкальный AI-ассистент SØNA.",
       "skill": "assistant",
       "provider": "openai",
-      "input": {"message": "string", "history": "array<object>"},
+      "enabled": true,
+      "source": "local",
+      "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
     "songwriter": {
@@ -14,14 +16,18 @@
       "description": "Написание и редактура песен, хуков, припевов и структуры трека.",
       "skill": "songwriter",
       "provider": "openai",
+      "enabled": true,
+      "source": "local",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
     "songwriting-ai-music": {
       "name": "SØNA Songwriting + Suno",
-      "description": "Расширенный songwriting skill из Hermes: структура песни, метрика и Suno prompts.",
+      "description": "Hermes-compatible songwriting skill: структура песни, метрика, вокальная подача и Suno prompts.",
       "skill": "songwriting-and-ai-music",
       "provider": "openai",
+      "enabled": true,
+      "source": "hermes-agent",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
@@ -30,6 +36,8 @@
       "description": "Контент, позиционирование и продвижение музыкального релиза.",
       "skill": "release-marketing",
       "provider": "openai",
+      "enabled": true,
+      "source": "local",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
@@ -38,14 +46,18 @@
       "description": "Поиск релевантных prompt-шаблонов prompts.chat и адаптация их под задачу.",
       "skill": "assistant",
       "provider": "openai+prompts.chat",
+      "enabled": true,
+      "source": "prompts.chat",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string", "sources": "array<object>"}
     },
     "skill-creator": {
       "name": "SØNA Skill Creator",
-      "description": "Создание, ревью и структурирование новых AgentSkills.",
+      "description": "Создание, ревью и структурирование новых AgentSkills по совместимому SKILL.md формату.",
       "skill": "skill-creator",
       "provider": "openai",
+      "enabled": true,
+      "source": "openclaw",
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     }
