@@ -88,7 +88,7 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["answer"], "TEST_TOOL_OK")
         self.assertEqual(result["tool_calls"], [{"name": "music.get_current_analysis", "status": "ok"}])
         exposed = {tool["name"] for tool in self.fake.tool_calls[-1]}
-        self.assertEqual(exposed, {"music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.analyze_mix", "music.build_advice"})
+        self.assertIn("music.diagnose_vocal_in_section", exposed)
         self.assertEqual(self.fake.last_tool_result["status"], "no_audio")
 
     @patch("agents.tools.music.current_analysis")
@@ -108,7 +108,7 @@ class AgentRuntimeTests(unittest.TestCase):
 
     def test_specialized_music_tools_are_read_only_and_registered(self):
         names = {item["name"] for item in list_tools()}
-        expected = {"music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map"}
+        expected = {"music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.diagnose_vocal_in_section"}
         self.assertTrue(expected.issubset(names))
 
     @patch("agents.tools.music.current_timeline", return_value={"status": "ok", "file": "track.wav", "loudness": {"segments": []}})
@@ -138,6 +138,51 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("melody_map", result)
         mocked.assert_called_once()
 
+    @patch("agents.tools.music.current_analysis")
+    def test_vocal_section_diagnostic_finds_low_mid_masking(self, current_analysis_mock):
+        current_analysis_mock.return_value = {
+            "status": "ok",
+            "file": "track.wav",
+            "analysis": {
+                "timeline": {"loudness": {"segments": [
+                    {"start": 0, "end": 5, "lufs": -12}, {"start": 5, "end": 10, "lufs": -10},
+                ]}},
+                "intelligence": {
+                    "spectral": {"segments": [
+                        {"start": 0, "end": 5, "centroid_hz": 1500, "rolloff_hz": 7000, "bands": {"low_mid": 18, "presence": 28, "mid": 25, "bass": 20}},
+                        {"start": 5, "end": 10, "centroid_hz": 1400, "rolloff_hz": 6800, "bands": {"low_mid": 24, "presence": 28, "mid": 25, "bass": 20}},
+                    ]},
+                    "stereo": {"segments": [
+                        {"start": 0, "end": 5, "correlation": 0.8}, {"start": 5, "end": 10, "correlation": 0.75},
+                    ]},
+                    "transients": {"events": [
+                        {"start": 5, "end": 10, "count": 4},
+                    ]},
+                    "vocal_events": {"events": [
+                        {"start": 5, "end": 10, "voiced_percent": 72, "median_midi": 64, "pitch_drift": 0.1},
+                    ]},
+                },
+            },
+        }
+        result = execute_tool("music.diagnose_vocal_in_section", {"section_start_sec": 5, "section_end_sec": 10})
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["section"]["start_sec"], 5.0)
+        self.assertTrue(any(item["cause"] == "low_mid_masking" for item in result["diagnosis"]))
+        self.assertEqual(result["vocal"]["median_voiced_percent"], 72.0)
+        current_analysis_mock.assert_called_once()
+
+    @patch("agents.tools.music.current_analysis", return_value=None)
+    def test_vocal_section_diagnostic_handles_missing_audio(self, current_analysis_mock):
+        result = execute_tool("music.diagnose_vocal_in_section", {"section_start_sec": 5, "section_end_sec": 10})
+        self.assertEqual(result["status"], "no_audio")
+        current_analysis_mock.assert_called_once()
+
+    def test_vocal_section_diagnostic_rejects_invalid_window(self):
+        with self.assertRaises(ToolError):
+            execute_tool("music.diagnose_vocal_in_section", {"section_start_sec": 10, "section_end_sec": 5})
+        with self.assertRaises(ToolError):
+            execute_tool("music.diagnose_vocal_in_section", {"section_start_sec": 0, "section_end_sec": 121})
+
     def test_tool_enabled_agent_does_not_preload_expensive_analysis(self):
         with patch("agents.router.current_analysis", side_effect=AssertionError("router must not preload analysis"), create=True):
             result = router.invoke("assistant", "Что можешь сделать?")
@@ -151,14 +196,13 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertEqual(result["answer"], "TEST_OK")
 
     def test_music_tool_schema_is_responses_compatible(self):
-        names = ["music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.analyze_mix", "music.build_advice"]
+        names = ["music.get_current_analysis", "music.get_current_timeline", "music.get_current_intelligence", "music.get_current_vocal_context", "music.get_current_melody_map", "music.diagnose_vocal_in_section", "music.analyze_mix", "music.build_advice"]
         specs = get_tool_specs(names)
         self.assertEqual({item["type"] for item in specs}, {"function"})
         self.assertTrue(all(item["strict"] for item in specs))
-        self.assertTrue(all("parameters" in item for item in specs))
-        for item in specs[:5]:
-            self.assertEqual(item["parameters"]["properties"], {})
-            self.assertEqual(item["parameters"]["required"], [])
+        current = next(item for item in specs if item["name"] == "music.diagnose_vocal_in_section")
+        self.assertEqual(set(current["parameters"]["required"]), {"section_start_sec", "section_end_sec"})
+        self.assertEqual(current["parameters"]["properties"]["section_start_sec"]["type"], "number")
 
     def test_invoke_supports_prompts_chat_provider(self):
         original_search = router.search_prompts
@@ -178,6 +222,7 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("music.get_current_analysis", names)
         self.assertIn("music.analyze_mix", names)
         self.assertIn("music.build_advice", names)
+        self.assertIn("music.diagnose_vocal_in_section", names)
 
     def test_music_analyze_tool_executes_existing_engine(self):
         result = execute_tool("music.analyze_mix", {"analysis": {"crest_factor_db": 6.0, "true_peak_dbfs": -0.2, "mono_correlation": 0.1}, "decisions": [], "master_report": {}})
