@@ -72,7 +72,7 @@ def security_middleware(app):
 def user_storage(base: Path) -> dict[str, Path]:
     persistent_base = Path(os.getenv("SONA_DATA_DIR", str(base / "data")))
     try: persistent_base.mkdir(parents=True, exist_ok=True)
-    except OSError: persistent_base = base / "data"; base.mkdir(parents=True, exist_ok=True)
+    except OSError: persistent_base = base / "data"; persistent_base.mkdir(parents=True, exist_ok=True)
     raw = current_user_id(); safe_id = "".join(ch for ch in raw if ch.isalnum() or ch in "-_")[:80] or "local"; root = persistent_base / "user_data" / safe_id
     dirs = {"root":root,"input":root/"mastering_input","output":root/"optimizer_output","separated":root/"separated","reference":root/"reference","project":root/"project_data"}
     for directory in dirs.values(): directory.mkdir(parents=True, exist_ok=True)
