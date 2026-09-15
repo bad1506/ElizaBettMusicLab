@@ -8,11 +8,15 @@ import security
 ROOT = Path(__file__).resolve().parents[1]
 AUDIO_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".ogg"}
 
+# One bounded snapshot per user. The audio identity changes when a new/replaced file
+# becomes the latest input, so stale data is discarded automatically.
+_MUSIC_SNAPSHOT_CACHE: dict[str, tuple[tuple[str, int, int], dict[str, Any]]] = {}
+
 
 def _latest_audio() -> Path | None:
     folder = security.user_storage(ROOT)["input"]
     candidates = [path for path in folder.iterdir() if path.is_file() and path.suffix.lower() in AUDIO_EXTS]
-    return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns) if candidates else None
 
 
 def _audio_or_none() -> Path:
@@ -22,50 +26,110 @@ def _audio_or_none() -> Path:
     return path
 
 
-def current_analysis() -> dict[str, Any] | None:
-    """Возвращает актуальный анализ последнего аудиофайла текущего пользователя."""
+def _audio_identity(path: Path) -> tuple[str, int, int]:
+    stat = path.stat()
+    return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+def clear_music_snapshot_cache(user_id: str | None = None) -> None:
+    """Очищает snapshot cache для пользователя или весь cache."""
+    if user_id is None:
+        _MUSIC_SNAPSHOT_CACHE.clear()
+    else:
+        _MUSIC_SNAPSHOT_CACHE.pop(str(user_id), None)
+
+
+def _build_music_snapshot(path: Path) -> dict[str, Any]:
+    """Однократно собирает все тяжёлые audio-derived данные для текущего файла."""
+    import audio_intelligence
+    import audio_timeline
+    import audio_to_song
     import master_engine
+    import melody_alignment
+
+    analysis = master_engine.analyze_file(path)
+    if not isinstance(analysis, dict):
+        raise ValueError("Master analysis returned an invalid result")
+
+    audio = audio_to_song.analyze(path)
+    if not isinstance(audio, dict):
+        audio = {}
+
+    intelligence = audio_intelligence.analyze_audio(path, segment_sec=5.0)
+    if not isinstance(intelligence, dict):
+        intelligence = {}
+
+    timeline = audio_timeline.build_timeline(path)
+    if not isinstance(timeline, dict):
+        timeline = {}
+
+    tempo = audio.get("tempo") if isinstance(audio.get("tempo"), dict) else {}
+    bpm = tempo.get("bpm")
+    melody_map = melody_alignment.analyze(path, bpm=bpm)
+    if not isinstance(melody_map, dict):
+        melody_map = {}
+
+    return {
+        "status": "ok",
+        "file": path.name,
+        "analysis": analysis,
+        "audio_context": audio,
+        "intelligence": intelligence,
+        "timeline": timeline,
+        "melody_map": melody_map,
+    }
+
+
+def _get_music_snapshot(path: Path) -> dict[str, Any]:
+    user_id = security.current_user_id()
+    identity = _audio_identity(path)
+    cached = _MUSIC_SNAPSHOT_CACHE.get(user_id)
+    if cached is not None and cached[0] == identity:
+        return cached[1]
+
+    snapshot = _build_music_snapshot(path)
+    _MUSIC_SNAPSHOT_CACHE[user_id] = (identity, snapshot)
+    return snapshot
+
+
+def current_analysis() -> dict[str, Any] | None:
+    """Возвращает актуальный read-only /analysis последнего аудиофайла текущего пользователя."""
     path = _latest_audio()
     if path is None:
         return None
     try:
-        analysis = master_engine.analyze_file(path)
+        snapshot = _get_music_snapshot(path)
     except Exception:
         return None
-    if not isinstance(analysis, dict):
-        return None
-    return {"status": "ok", "file": path.name, "analysis": analysis}
+    return {"status": "ok", "file": path.name, "analysis": snapshot["analysis"]}
 
 
 def current_timeline() -> dict[str, Any]:
     """Возвращает waveform/loudness timeline текущего пользовательского трека."""
-    import audio_timeline
     path = _audio_or_none()
-    return {"status": "ok", "file": path.name, **audio_timeline.build_timeline(path)}
+    snapshot = _get_music_snapshot(path)
+    return {"status": "ok", "file": path.name, **snapshot["timeline"]}
 
 
 def current_intelligence() -> dict[str, Any]:
     """Возвращает сегментный spectral/stereo/transient/vocal intelligence текущего трека."""
-    import audio_intelligence
     path = _audio_or_none()
-    return {"status": "ok", "file": path.name, **audio_intelligence.analyze_audio(path, segment_sec=5.0)}
+    snapshot = _get_music_snapshot(path)
+    return {"status": "ok", "file": path.name, **snapshot["intelligence"]}
 
 
 def current_vocal_context() -> dict[str, Any]:
     """Возвращает музыкальный контекст вокала и структуры текущего трека."""
-    import audio_to_song
     path = _audio_or_none()
-    return {"status": "ok", "file": path.name, "audio_context": audio_to_song.analyze(path)}
+    snapshot = _get_music_snapshot(path)
+    return {"status": "ok", "file": path.name, "audio_context": snapshot["audio_context"]}
 
 
 def current_melody_map() -> dict[str, Any]:
     """Возвращает оценочную melody map текущего трека."""
-    import audio_to_song
-    import melody_alignment
     path = _audio_or_none()
-    audio = audio_to_song.analyze(path)
-    bpm = (audio.get("tempo") or {}).get("bpm")
-    return {"status": "ok", "file": path.name, "melody_map": melody_alignment.analyze(path, bpm=bpm)}
+    snapshot = _get_music_snapshot(path)
+    return {"status": "ok", "file": path.name, "melody_map": snapshot["melody_map"]}
 
 
 def _first_number(data: dict[str, Any], *paths: tuple[str, ...]) -> float | None:
@@ -85,17 +149,21 @@ def _first_number(data: dict[str, Any], *paths: tuple[str, ...]) -> float | None
 
 
 def current_music_intelligence() -> dict[str, Any]:
-    """Собирает единый read-only отчёт для AI Music Engineer из доступных движков."""
-    snapshot = current_analysis()
-    if snapshot is None:
+    """Собирает единый read-only отчёт для AI Music Engineer из одного cached snapshot."""
+    path = _latest_audio()
+    if path is None:
         return {"status": "no_audio", "message": "У текущего пользователя нет доступного аудиофайла для анализа."}
 
+    try:
+        snapshot = _get_music_snapshot(path)
+    except Exception:
+        return {"status": "no_audio", "message": "Не удалось построить анализ текущего аудиофайла."}
+
     analysis = snapshot.get("analysis") if isinstance(snapshot.get("analysis"), dict) else {}
-    vocal = current_vocal_context()
-    audio = vocal.get("audio_context") if isinstance(vocal.get("audio_context"), dict) else {}
-    intelligence = current_intelligence()
-    timeline = current_timeline()
-    melody = current_melody_map()
+    audio = snapshot.get("audio_context") if isinstance(snapshot.get("audio_context"), dict) else {}
+    intelligence = snapshot.get("intelligence") if isinstance(snapshot.get("intelligence"), dict) else {}
+    timeline = snapshot.get("timeline") if isinstance(snapshot.get("timeline"), dict) else {}
+    melody = snapshot.get("melody_map") if isinstance(snapshot.get("melody_map"), dict) else {}
 
     tempo = audio.get("tempo") if isinstance(audio.get("tempo"), dict) else {}
     key = audio.get("key") if isinstance(audio.get("key"), dict) else {}
@@ -111,7 +179,6 @@ def current_music_intelligence() -> dict[str, Any]:
         except (KeyError, TypeError, ValueError):
             continue
 
-    intel = intelligence
     report = {
         "status": "ok",
         "file": snapshot.get("file"),
@@ -123,10 +190,10 @@ def current_music_intelligence() -> dict[str, Any]:
         },
         "structure": {"sections": valid_sections, "section_count": len(valid_sections)},
         "vocal": audio.get("vocal") or audio.get("vocals") or {},
-        "melody": melody.get("melody_map") or {},
+        "melody": melody,
         "mix": {
-            "loudness": (timeline.get("loudness") if isinstance(timeline.get("loudness"), dict) else {}),
-            "intelligence": {"spectral": intel.get("spectral"), "stereo": intel.get("stereo"), "transients": intel.get("transients"), "vocal_events": intel.get("vocal_events")},
+            "loudness": timeline.get("loudness") if isinstance(timeline.get("loudness"), dict) else {},
+            "intelligence": {"spectral": intelligence.get("spectral"), "stereo": intelligence.get("stereo"), "transients": intelligence.get("transients"), "vocal_events": intelligence.get("vocal_events")},
         },
         "engine": {
             "decisions": analysis.get("decisions", []),
