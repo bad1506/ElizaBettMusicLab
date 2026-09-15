@@ -29,11 +29,10 @@ class SkillRegistry:
         if not self.root.is_dir():
             return
 
-        # Поддерживаем как текущий legacy-формат *.md, так и AgentSkills SKILL.md
-        # из OpenClaw/Hermes. Более глубокие каталоги позволяют хранить
-        # несколько независимых внешних пакетов без конфликтов имён файлов.
+        # Native SØNA skills — *.md прямо в .sona/skills.
+        # Внешние AgentSkills — только SKILL.md, чтобы README/SOURCES не становились skills.
         for path in sorted(self.root.rglob("*.md")):
-            if path.name != "SKILL.md" and path.parent != self.root and "external" not in path.parts:
+            if path.parent != self.root and path.name != "SKILL.md":
                 continue
             spec = self._parse(path)
             if spec and spec.name not in self._skills:
