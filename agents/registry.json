@@ -61,6 +61,8 @@
       "description": "Создание, ревью и структурирование новых AgentSkills по совместимому SKILL.md формату.",
       "skill": "skill-creator",
       "provider": "openai",
+      "enabled": true,
+      "source": "openclaw",
       "tools": [],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
