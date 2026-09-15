@@ -58,5 +58,5 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
-      - run: npm ci
+      - run: npm install
       - run: npm audit --audit-level=high
