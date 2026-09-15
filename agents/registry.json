@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "agents": {
+    "assistant": {
+      "name": "SØNA Assistant",
+      "description": "Основной музыкальный AI-ассистент SØNA.",
+      "skill": "assistant",
+      "provider": "openai",
+      "input": {
+        "message": "string",
+        "history": "array<object>"
+      },
+      "output": {
+        "answer": "string"
+      }
+    },
+    "songwriter": {
+      "name": "SØNA Songwriter",
+      "description": "Написание и редактура песен, хуков, припевов и структуры трека.",
+      "skill": "songwriter",
+      "provider": "openai",
+      "input": {
+        "message": "string",
+        "history": "array<object>",
+        "context": "object"
+      },
+      "output": {
+        "answer": "string"
+      }
+    },
+    "release-marketing": {
+      "name": "SØNA Release Marketing",
+      "description": "Контент, позиционирование и продвижение музыкального релиза.",
+      "skill": "release-marketing",
+      "provider": "openai",
+      "input": {
+        "message": "string",
+        "history": "array<object>",
+        "context": "object"
+      },
+      "output": {
+        "answer": "string"
+      }
+    },
+    "prompt-engineering": {
+      "name": "SØNA Prompt Engineering",
+      "description": "Поиск релевантных prompt-шаблонов prompts.chat и адаптация их под задачу.",
+      "skill": "assistant",
+      "provider": "openai+prompts.chat",
+      "input": {
+        "message": "string",
+        "history": "array<object>",
+        "context": "object"
+      },
+      "output": {
+        "answer": "string",
+        "sources": "array<object>"
+      }
+    }
+  }
+}
