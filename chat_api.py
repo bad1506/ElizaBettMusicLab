@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from typing import Any
 
 from fastapi import HTTPException
@@ -62,6 +63,9 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
     context.pop("skill", None)
     context.pop("agent", None)
 
+    if not os.getenv("OPENAI_API_KEY", "").strip():
+        raise HTTPException(503, "SØNA AI не настроен на backend: отсутствует OPENAI_API_KEY.")
+
     try:
         result = invoke_agent(
             selected_agent,
@@ -71,7 +75,7 @@ def _run(request: ChatRequest, *, skill: str | None = None, agent: str | None = 
             user_id=security.current_user_id(),
         )
     except AgentError as exc:
-        raise HTTPException(502, "SØNA Agent Runtime временно недоступен. Проверьте AI API на backend.") from exc
+        raise HTTPException(502, "SØNA Agent Runtime временно недоступен. Проверьте AI API и backend logs.") from exc
 
     return {
         "ok": True,
