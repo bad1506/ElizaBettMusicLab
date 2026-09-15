@@ -91,6 +91,15 @@ def _configured_tools(spec: dict[str, Any]) -> tuple[list[str], list[dict[str, A
         raise AgentError(str(exc)) from exc
 
 
+def _public_music_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Ограниченный UI-safe payload unified report без raw engine internals."""
+    allowed = {
+        "status", "file", "technical", "structure", "vocal", "melody", "mix",
+        "issues", "priority_order", "limitations",
+    }
+    return {key: report[key] for key in allowed if key in report}
+
+
 def invoke(
     agent_name: str,
     message: str,
@@ -182,12 +191,17 @@ def invoke(
         "соответствующий разрешённый инструмент. Отвечай на языке пользователя."
     )
 
+    captured_music_report: dict[str, Any] | None = None
     try:
         if tool_specs:
             def _execute_allowed(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+                nonlocal captured_music_report
                 if name not in tool_names:
                     raise ToolError("Tool is not allowed for this agent")
-                return execute_tool(name, arguments)
+                result = execute_tool(name, arguments)
+                if name == "music.get_current_intelligence_report" and isinstance(result, dict):
+                    captured_music_report = _public_music_report(result)
+                return result
 
             answer, tool_calls = provider.generate_with_tools(
                 system=system,
@@ -215,6 +229,8 @@ def invoke(
         }
         if tool_calls:
             result["tool_calls"] = tool_calls
+        if captured_music_report is not None:
+            result["music_report"] = captured_music_report
         _write_log({
             "event": "agent_call",
             "agent": agent_name,
