@@ -24,11 +24,12 @@ import songwriter_editor
 import songwriting_agent
 import telegram_auth
 import vocal_intelligence
+from sona_skills import skill_context
 
 BASE = Path(__file__).resolve().parent
-APP_VERSION = "12.0.0"
+APP_VERSION = "12.1.0"
 ENABLE_DOCS = os.getenv("ENABLE_API_DOCS", "false").lower() == "true"
-app = FastAPI(title="Eliza Bett Music Lab AI Engineer", version=APP_VERSION, docs_url="/docs" if ENABLE_DOCS else None, redoc_url="/redoc" if ENABLE_DOCS else None, openapi_url="/openapi.json" if ENABLE_DOCS else None)
+app = FastAPI(title="SØNA Music Intelligence", version=APP_VERSION, docs_url="/docs" if ENABLE_DOCS else None, redoc_url="/redoc" if ENABLE_DOCS else None, openapi_url="/openapi.json" if ENABLE_DOCS else None)
 
 
 def _cors_origins() -> list[str]:
@@ -37,7 +38,7 @@ def _cors_origins() -> list[str]:
     return [origin.strip() for origin in configured.split(",") if origin.strip()] or defaults
 
 
-app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-Telegram-Init-Data"])
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Telegram-Init-Data"])
 security.security_middleware(app)
 
 AUDIO_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".ogg"}
@@ -69,7 +70,7 @@ def build_analysis() -> dict[str, Any]:
 
 @app.get("/")
 def root():
-    return {"status": "online", "service": "Eliza Bett Music Lab AI Engineer", "version": APP_VERSION}
+    return {"status": "online", "service": "SØNA Music Intelligence", "version": APP_VERSION}
 
 
 @app.get("/health")
@@ -133,35 +134,27 @@ def analysis():
 @app.get("/timeline")
 def get_timeline(source: str = "original"):
     dirs = storage()
-    if source == "master":
-        path = _latest(dirs["output"], lambda p: p.name.endswith("_MASTER.wav"))
-    elif source == "reference":
-        path = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
-    elif source == "original":
-        path = find_latest_audio()
-    else:
-        raise HTTPException(400, "Invalid source")
-    if path is None:
-        return {"status": "no_audio", "source": source}
+    if source == "master": path = _latest(dirs["output"], lambda p: p.name.endswith("_MASTER.wav"))
+    elif source == "reference": path = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
+    elif source == "original": path = find_latest_audio()
+    else: raise HTTPException(400, "Invalid source")
+    if path is None: return {"status": "no_audio", "source": source}
     return {"status": "ok", "source": source, "file": path.name, **audio_timeline.build_timeline(path)}
 
 
 @app.get("/songwriter/audio-context")
 def songwriter_audio_context():
     path = find_latest_audio()
-    if path is None:
-        return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
+    if path is None: return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
     return {"status": "ok", "file": path.name, "audio_context": audio_to_song.analyze(path)}
 
 
 @app.get("/songwriter/melody-map")
 def songwriter_melody_map():
     path = find_latest_audio()
-    if path is None:
-        return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
+    if path is None: return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
     try:
-        audio = audio_to_song.analyze(path)
-        bpm = (audio.get("tempo") or {}).get("bpm")
+        audio = audio_to_song.analyze(path); bpm = (audio.get("tempo") or {}).get("bpm")
         return {"status": "ok", "file": path.name, "melody_map": melody_alignment.analyze(path, bpm=bpm)}
     except Exception:
         raise HTTPException(500, "Melody map generation failed")
@@ -170,20 +163,13 @@ def songwriter_melody_map():
 @app.get("/intelligence")
 def intelligence(source: str = "original"):
     dirs = storage()
-    if source == "master":
-        path = _latest(dirs["output"], lambda p: p.name.endswith("_MASTER.wav"))
-    elif source == "reference":
-        path = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
-    elif source == "original":
-        path = find_latest_audio()
-    else:
-        raise HTTPException(400, "Invalid source")
-    if path is None:
-        return {"status": "no_audio", "source": source}
-    try:
-        return {"status": "ok", "source": source, "file": path.name, **audio_intelligence.analyze_audio(path, segment_sec=5.0)}
-    except Exception:
-        raise HTTPException(500, "Audio intelligence analysis failed")
+    if source == "master": path = _latest(dirs["output"], lambda p: p.name.endswith("_MASTER.wav"))
+    elif source == "reference": path = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
+    elif source == "original": path = find_latest_audio()
+    else: raise HTTPException(400, "Invalid source")
+    if path is None: return {"status": "no_audio", "source": source}
+    try: return {"status": "ok", "source": source, "file": path.name, **audio_intelligence.analyze_audio(path, segment_sec=5.0)}
+    except Exception: raise HTTPException(500, "Audio intelligence analysis failed")
 
 
 class SongwriterRequest(BaseModel):
@@ -221,16 +207,19 @@ def songwriter_analyze(request: SongwriterAnalyzeRequest):
 @app.post("/songwriter")
 def songwriter(request: SongwriterRequest):
     try:
-        answer = songwriting_agent.generate(request.request, request.mode, request.context, request.trend_context)
+        context = dict(request.context or {})
+        context["sona_skill"] = skill_context(str(context.get("skill") or "songwriter"))
+        answer = songwriting_agent.generate(request.request, request.mode, context, request.trend_context)
     except Exception:
         raise HTTPException(502, "Songwriter service failed")
-    return {"ok": True, "agent": "ELIZA BETT SONGWRITER", "version": songwriting_agent.AGENT_VERSION, "mode": request.mode, "answer": answer}
+    return {"ok": True, "agent": "SØNA SONGWRITER", "version": songwriting_agent.AGENT_VERSION, "mode": request.mode, "answer": answer}
 
 
 @app.post("/songwriter/trends")
 def songwriter_trends(request: TrendRequest):
     try:
-        return songwriting_agent.trend_report(request.focus)
+        focus = request.focus + "\n\nSØNA TRENDS SKILL:\n" + skill_context("trends")
+        return songwriting_agent.trend_report(focus)
     except Exception:
         raise HTTPException(502, "Trend service failed")
 
@@ -243,35 +232,26 @@ class SongDirectorRequest(BaseModel):
 
 @app.post("/songwriter/direct")
 def songwriter_direct(request: SongDirectorRequest):
-    context = dict(request.context or {})
-    path = find_latest_audio()
+    context = dict(request.context or {}); path = find_latest_audio()
     if path is not None:
         try:
-            context["audio_to_song"] = audio_to_song.analyze(path)
-            bpm = (context["audio_to_song"].get("tempo") or {}).get("bpm")
-            context["melody_map"] = melody_alignment.analyze(path, bpm=bpm)
-        except Exception:
-            context["audio_to_song_error"] = "analysis_failed"
-    try:
-        return song_director.direct(request.request, context, request.trend_context)
-    except Exception:
-        raise HTTPException(502, "Song director service failed")
+            context["audio_to_song"] = audio_to_song.analyze(path); bpm = (context["audio_to_song"].get("tempo") or {}).get("bpm"); context["melody_map"] = melody_alignment.analyze(path, bpm=bpm)
+        except Exception: context["audio_to_song_error"] = "analysis_failed"
+    try: return song_director.direct(request.request, context, request.trend_context)
+    except Exception: raise HTTPException(502, "Song director service failed")
 
 
 @app.get("/songwriter/memory")
 def songwriter_memory_get(limit: int = 12):
     import songwriter_memory
-    limit = max(1, min(limit, 30))
-    uid = security.current_user_id()
+    limit = max(1, min(limit, 30)); uid = security.current_user_id()
     return {"ok": True, "memory": songwriter_memory.memory(uid), "dna": songwriter_memory.dna(uid), "recent": songwriter_memory.recent(limit, uid)}
 
 
 @app.post("/songwriter/memory")
 def songwriter_memory_save(request: SongMemoryRequest):
     import songwriter_memory
-    uid = security.current_user_id()
-    item = songwriter_memory.add_song(request.title, request.text, request.mode, request.tags, request.metadata, uid)
-    dna = songwriter_memory.build_local_dna(uid)
+    uid = security.current_user_id(); item = songwriter_memory.add_song(request.title, request.text, request.mode, request.tags, request.metadata, uid); dna = songwriter_memory.build_local_dna(uid)
     return {"ok": True, "saved": item, "dna": dna}
 
 
@@ -290,22 +270,17 @@ def songwriter_dna_rebuild():
 @app.get("/vocal")
 def vocal():
     path = find_latest_audio()
-    if path is None:
-        return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
-    try:
-        return vocal_intelligence.analyze_vocal(path)
-    except Exception:
-        raise HTTPException(500, "Vocal analysis failed")
+    if path is None: return {"status": "no_audio", "message": "Сначала загрузите аудиофайл."}
+    try: return vocal_intelligence.analyze_vocal(path)
+    except Exception: raise HTTPException(500, "Vocal analysis failed")
 
 
 @app.post("/reference")
 async def reference(file: UploadFile = File(...)):
     path = await _save_audio(file, storage()["reference"], "reference.wav")
-    try:
-        analysis = master_engine.analyze_file(path)
+    try: analysis = master_engine.analyze_file(path)
     except Exception:
-        path.unlink(missing_ok=True)
-        raise HTTPException(400, "Не удалось обработать референс")
+        path.unlink(missing_ok=True); raise HTTPException(400, "Не удалось обработать референс")
     return {"ok": True, "file": path.name, "analysis": analysis}
 
 
@@ -318,34 +293,26 @@ class MasterRequest(BaseModel):
 
 @app.post("/master")
 def master(request: MasterRequest):
-    dirs = storage()
-    path = find_latest_audio()
-    if path is None:
-        raise HTTPException(400, "Сначала загрузите аудиофайл")
+    dirs = storage(); path = find_latest_audio()
+    if path is None: raise HTTPException(400, "Сначала загрузите аудиофайл")
     reference = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
-    try:
-        return master_engine.run(path, dirs["output"], request.target_lufs, request.ceiling_db, request.intensity, reference=reference, profile=request.profile)
-    except Exception:
-        raise HTTPException(500, "Mastering failed")
+    try: return master_engine.run(path, dirs["output"], request.target_lufs, request.ceiling_db, request.intensity, reference=reference, profile=request.profile)
+    except Exception: raise HTTPException(500, "Mastering failed")
 
 
 @app.get("/master/latest")
 def latest_master():
     path = _latest(storage()["output"], lambda p: p.name.endswith("_MASTER.wav"))
-    if not path:
-        raise HTTPException(404, "Мастер ещё не создан")
+    if not path: raise HTTPException(404, "Мастер ещё не создан")
     return {"file": path.name, "url": f"/files/optimizer_output/{path.name}"}
 
 
 @app.get("/reference/latest")
 def latest_reference():
     path = _latest(storage()["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
-    if not path:
-        return {"status": "no_reference"}
-    try:
-        return {"file": path.name, "analysis": master_engine.analyze_file(path)}
-    except Exception:
-        raise HTTPException(500, "Reference analysis failed")
+    if not path: return {"status": "no_reference"}
+    try: return {"file": path.name, "analysis": master_engine.analyze_file(path)}
+    except Exception: raise HTTPException(500, "Reference analysis failed")
 
 
 class ProductionRequest(BaseModel):
@@ -357,20 +324,16 @@ class ProductionRequest(BaseModel):
 @app.post("/production/run")
 def production_run(request: ProductionRequest):
     dirs = storage()
-    try:
-        result = production_engine.run(dirs["input"], dirs["output"], request.request, request.profile, request.target_lufs)
-    except Exception:
-        raise HTTPException(500, "Production engine failed")
-    if not result.get("ok"):
-        raise HTTPException(400, "Production request could not be completed")
+    try: result = production_engine.run(dirs["input"], dirs["output"], request.request, request.profile, request.target_lufs)
+    except Exception: raise HTTPException(500, "Production engine failed")
+    if not result.get("ok"): raise HTTPException(400, "Production request could not be completed")
     return result
 
 
 @app.get("/production/latest")
 def production_latest():
     path = _latest(storage()["output"], lambda p: "_PRODUCTION_" in p.name and p.suffix == ".json")
-    if not path:
-        return {"status": "no_report"}
+    if not path: return {"status": "no_report"}
     return {"status": "ok", "file": path.name, "url": f"/files/optimizer_output/{path.name}"}
 
 
@@ -384,42 +347,27 @@ class ProjectRequest(BaseModel):
 
 
 @app.get("/project")
-def project_latest():
-    dirs = storage()
-    return project_manager.load(dirs["project"])
-
+def project_latest(): return project_manager.load(storage()["project"])
 
 @app.post("/project/save")
-def project_save(request: ProjectRequest):
-    dirs = storage()
-    return project_manager.save(dirs["input"], dirs["output"], dirs["project"], request.model_dump())
-
+def project_save(request: ProjectRequest): return project_manager.save(storage()["input"], storage()["output"], storage()["project"], request.model_dump())
 
 @app.post("/project/export")
 def project_export(request: ProjectRequest):
-    dirs = storage()
-    try:
-        return project_manager.export_bundle(dirs["input"], dirs["output"], dirs["project"], request.model_dump())
-    except Exception:
-        raise HTTPException(500, "Project export failed")
+    try: return project_manager.export_bundle(storage()["input"], storage()["output"], storage()["project"], request.model_dump())
+    except Exception: raise HTTPException(500, "Project export failed")
 
 
 @app.post("/stems")
 def stems():
-    dirs = storage()
-    path = find_latest_audio()
-    if path is None:
-        raise HTTPException(400, "Сначала загрузите аудиофайл")
+    dirs = storage(); path = find_latest_audio()
+    if path is None: raise HTTPException(400, "Сначала загрузите аудиофайл")
     device = os.getenv("DEMUCS_DEVICE", "cuda")
-    if device not in {"cuda", "cpu"}:
-        device = "cuda"
+    if device not in {"cuda", "cpu"}: device = "cuda"
     cmd = [sys.executable, "-m", "demucs", "-d", device, "-n", "htdemucs", "-o", str(dirs["separated"]), str(path)]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800, check=False)
-    except subprocess.TimeoutExpired:
-        raise HTTPException(504, "Stem separation timed out")
-    if result.returncode != 0:
-        raise HTTPException(500, "Stem separation failed")
+    try: result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800, check=False)
+    except subprocess.TimeoutExpired: raise HTTPException(504, "Stem separation timed out")
+    if result.returncode != 0: raise HTTPException(500, "Stem separation failed")
     stem_root = dirs["separated"] / "htdemucs" / path.stem
     stems = {name: f"/files/separated/{stem_root.relative_to(dirs['separated']).as_posix()}" for name in ("vocals.wav", "drums.wav", "bass.wav", "other.wav") if (stem_root/name).exists()}
     return {"ok": True, "stems": stems}
@@ -428,22 +376,5 @@ def stems():
 @app.get("/files/{kind}/{relative_path:path}")
 def secure_file(kind: str, relative_path: str):
     path = security.resolve_user_file(BASE, kind, relative_path)
-    if path is None:
-        raise HTTPException(404, "File not found")
+    if not path: raise HTTPException(404, "File not found")
     return FileResponse(path)
-
-
-class ChatRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=6000)
-
-
-@app.post("/chat")
-def chat(request: ChatRequest):
-    context = build_analysis()
-    if context.get("status") == "no_audio":
-        return {"answer": context["message"], "context": context}
-    try:
-        answer = ai_assistant.answer_local(request.question, context.get("adaptive_analysis", {}), context.get("decisions", []))
-    except Exception:
-        raise HTTPException(502, "AI assistant failed")
-    return {"answer": answer, "context": context}
