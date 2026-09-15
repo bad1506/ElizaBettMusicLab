@@ -2,7 +2,6 @@ import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './glass-interactions.css'
-import './SonaAssistantChat.css'
 import './SonaSferoomChat.css'
 import './SonaCommercialFixes.css'
 import './sona-cursor-glow.css'
@@ -23,7 +22,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
-  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends'
+  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends' || path === '/api/sona-chat' || path === '/api/agents/skills'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
@@ -39,6 +38,8 @@ function CursorGlow() {
     const move = (event: PointerEvent) => {
       if (raf) cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--sona-pointer-x', `${event.clientX}px`)
+        document.documentElement.style.setProperty('--sona-pointer-y', `${event.clientY}px`)
         document.querySelectorAll<HTMLElement>('.sona-sferoom-panel,.sona-ai-card,.sona-surface-glow').forEach((panel) => {
           const rect = panel.getBoundingClientRect()
           panel.style.setProperty('--mx', `${event.clientX - rect.left}px`)
