@@ -2,9 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './glass-interactions.css'
+import './SonaAssistantChat.css'
 import SonaPublic from './SonaPublic.tsx'
 
-type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?: (color: string) => void; setBackgroundColor?: (color: string) => void; initData?: string; initDataUnsafe?: { user?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } } }
+type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?: (color: string) => void; setBackgroundColor?: (color: string) => void; initData?: string; initDataUnsafe?: { user?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } }
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
 const telegram = window.Telegram?.WebApp
 const initData = telegram?.initData?.trim() || ''
