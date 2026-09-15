@@ -41,6 +41,7 @@
       "provider": "openai",
       "enabled": true,
       "source": "local",
+      "tools": [],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
       "output": {"answer": "string"}
     },
@@ -53,7 +54,7 @@
       "source": "prompts.chat",
       "tools": [],
       "input": {"message": "string", "history": "array<object>", "context": "object"},
-      "output": {"answer": "string", "sources": "array<object"}
+      "output": {"answer": "string", "sources": "array<object>"}
     },
     "skill-creator": {
       "name": "SØNA Skill Creator",
