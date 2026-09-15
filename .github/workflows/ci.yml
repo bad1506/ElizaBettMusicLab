@@ -17,9 +17,9 @@ jobs:
         working-directory: ai-engineer-ui
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Install dependencies
@@ -47,9 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Compile all Python modules
@@ -59,7 +59,7 @@ jobs:
           python - <<'PY'
           import ast
           from pathlib import Path
-          tree = ast.parse(Path("api.py").read_text(encoding="utf-8"))
+          tree = ast.parse(Path("api_secure.py").read_text(encoding="utf-8"))
           routes = []
           for node in ast.walk(tree):
               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
