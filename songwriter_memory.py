@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
-# Keep songwriter memory under the same configurable SØNA data root as audio,
-# projects and generated files. This avoids silently writing user data into the
-# application working directory on hosted deployments.
-_BASE_CONFIGURED = os.getenv("SONA_DATA_DIR", "").strip()
-BASE_DATA_DIR = Path(_BASE_CONFIGURED).expanduser() if _BASE_CONFIGURED else Path(__file__).resolve().parent / "data"
-BASE_DATA_DIR = BASE_DATA_DIR / "songwriter_data"
+from storage_backend import get_storage_backend
+
 DEFAULT_MEMORY = {'version':'1.0','updated_at':None,'songs':[],'notes':[]}
 DEFAULT_DNA = {
     'version':'1.0','updated_at':None,'identity':'','genres':[],'themes':[],'motifs':[],
@@ -21,8 +16,7 @@ DEFAULT_DNA = {
 
 
 def _paths(user_id: str = 'local'):
-    safe = ''.join(ch for ch in str(user_id) if ch.isalnum() or ch in '-_')[:80] or 'local'
-    data_dir = BASE_DATA_DIR / safe
+    data_dir = get_storage_backend(Path(__file__).resolve().parent).user_root(user_id) / 'songwriter_data'
     return data_dir, data_dir / 'memory.json', data_dir / 'artist_dna.json'
 
 
