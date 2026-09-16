@@ -6,7 +6,12 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 
-BASE_DATA_DIR = Path(os.getenv('ELIZA_DATA_DIR', '.')) / 'songwriter_data'
+# Keep songwriter memory under the same configurable SØNA data root as audio,
+# projects and generated files. This avoids silently writing user data into the
+# application working directory on hosted deployments.
+_BASE_CONFIGURED = os.getenv("SONA_DATA_DIR", "").strip()
+BASE_DATA_DIR = Path(_BASE_CONFIGURED).expanduser() if _BASE_CONFIGURED else Path(__file__).resolve().parent / "data"
+BASE_DATA_DIR = BASE_DATA_DIR / "songwriter_data"
 DEFAULT_MEMORY = {'version':'1.0','updated_at':None,'songs':[],'notes':[]}
 DEFAULT_DNA = {
     'version':'1.0','updated_at':None,'identity':'','genres':[],'themes':[],'motifs':[],
