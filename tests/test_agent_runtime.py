@@ -37,8 +37,13 @@ def test_registry_parses_agentskills_frontmatter(tmp_path):
 
 def test_router_selects_skill_and_returns_answer(monkeypatch):
     monkeypatch.setattr(router_module, "search_prompts", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(router_module.ai_assistant, "_openai_model", lambda: "test-model")
-    monkeypatch.setattr(router_module.ai_assistant, "_openai", lambda payload, timeout: "готовый ответ")
+    monkeypatch.setattr(router_module.ai_assistant, "_openai_model", lambda: "test-model", raising=False)
+    monkeypatch.setattr(
+        router_module.ai_assistant,
+        "_openai",
+        lambda payload, timeout: "готовый ответ",
+        raising=False,
+    )
 
     router = router_module.AgentRouter()
     result = router.run(AgentRequest(message="Давай напишем припев для новой песни"))

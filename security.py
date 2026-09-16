@@ -18,10 +18,14 @@ _PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/logi
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock(); _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
+
 def max_upload_bytes() -> int: return _MAX_UPLOAD_BYTES
+
 def current_user() -> dict[str, Any]: return CURRENT_USER.get() or {"id": "local", "first_name": "Local"}
+
 def current_user_id() -> str: return str(current_user().get("id") or "local")
 def is_local_request(request: Request) -> bool: return (request.client.host if request.client else "") in {"127.0.0.1", "::1", "localhost"}
+
 
 def _rate_limit(bucket: str, limit: int, window: int = 60) -> bool:
     now = time.monotonic()
@@ -31,10 +35,36 @@ def _rate_limit(bucket: str, limit: int, window: int = 60) -> bool:
         if len(q) >= limit: return False
         q.append(now); return True
 
+
+def _workspace_snapshot(root: Path) -> dict[str, tuple[int, int]]:
+    snapshot: dict[str, tuple[int, int]] = {}
+    if not root.exists():
+        return snapshot
+    for path in root.rglob("*"):
+        if not path.is_file() or path.name == ".sona-storage.lock" or ".sona_storage_meta" in path.parts:
+            continue
+        try:
+            stat = path.stat(); snapshot[str(path)] = (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            continue
+    return snapshot
+
+
+def _persist_workspace(base: Path, root: Path, before: dict[str, tuple[int, int]]) -> None:
+    backend = get_storage_backend(base)
+    after = _workspace_snapshot(root)
+    changed = [Path(path) for path, stamp in after.items() if before.get(path) != stamp]
+    deleted = [Path(path) for path in before if path not in after]
+    for path in changed:
+        backend.sync_file(current_user_id(), path)
+    if deleted:
+        backend.delete_files(current_user_id(), deleted)
+
+
 def security_middleware(app):
     @app.middleware("http")
     async def _security(request: Request, call_next):
-        path = request.url.path; token = None
+        path = request.url.path; token = None; workspace_root: Path | None = None; workspace_before: dict[str, tuple[int, int]] = {}
         if request.method == "OPTIONS":
             response = await call_next(request); response.headers.setdefault("X-Content-Type-Options", "nosniff"); return response
         if path == "/sona-chat":
@@ -77,19 +107,48 @@ def security_middleware(app):
                             if token: CURRENT_USER.reset(token)
                             return JSONResponse({"detail": "Uploaded file is too large"}, status_code=413)
                     except ValueError: pass
-        try: response = await call_next(request)
+        if token or path == "/sona-chat" or path not in _PUBLIC_PATHS:
+            try:
+                backend = get_storage_backend(Path(__file__).resolve().parent)
+                workspace_root = backend.user_root(current_user_id())
+                backend.hydrate(current_user_id())
+                workspace_before = _workspace_snapshot(workspace_root)
+            except Exception:
+                if token: CURRENT_USER.reset(token)
+                return JSONResponse({"detail": "User storage unavailable"}, status_code=503)
+        try:
+            response = await call_next(request)
+            if workspace_root is not None and response.status_code < 400:
+                try:
+                    _persist_workspace(Path(__file__).resolve().parent, workspace_root, workspace_before)
+                except Exception:
+                    return JSONResponse({"detail": "User storage synchronization failed"}, status_code=503)
         finally:
             if token: CURRENT_USER.reset(token)
         for key, value in {"X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","Referrer-Policy":"no-referrer","Permissions-Policy":"camera=(), microphone=(), geolocation=()","Cross-Origin-Resource-Policy":"same-site","Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'"}.items(): response.headers.setdefault(key, value)
         return response
     return _security
 
+
 def user_storage(base: Path) -> dict[str, Path]:
     backend = get_storage_backend(base)
-    root = backend.user_root(current_user_id())
+    user_id = current_user_id()
+    root = backend.user_root(user_id)
+    backend.hydrate(user_id)
     dirs = {"root":root,"input":root/"mastering_input","output":root/"optimizer_output","separated":root/"separated","reference":root/"reference","project":root/"project_data"}
     for directory in dirs.values(): directory.mkdir(parents=True, exist_ok=True)
     return dirs
+
+
+def sync_user_file(base: Path, path: Path, *, key: str | None = None):
+    backend = get_storage_backend(base)
+    return backend.sync_file(current_user_id(), path, key=key)
+
+
+def sync_user_tree(base: Path, root: Path, *, prefix: str | None = None):
+    backend = get_storage_backend(base)
+    return backend.sync_tree(current_user_id(), root, prefix=prefix)
+
 
 def resolve_user_file(base: Path, kind: str, relative_path: str) -> Path | None:
     dirs = user_storage(base); key = {"input":"input","optimizer_output":"output","separated":"separated","reference":"reference","project_data":"project"}.get(kind)

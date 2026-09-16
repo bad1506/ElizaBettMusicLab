@@ -1,0 +1,51 @@
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud artifacts repositories describe sona --location=${_REGION} >/dev/null 2>&1 || \
+        gcloud artifacts repositories create sona --repository-format=docker --location=${_REGION} --description="SØNA container images"
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_IMAGE}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_IMAGE}
+      - --region=${_REGION}
+      - --platform=managed
+      - --memory=2Gi
+      - --cpu=2
+      - --timeout=900
+      - --concurrency=10
+      - --min-instances=0
+      - --max-instances=3
+      - --port=8080
+      - --allow-unauthenticated
+
+images:
+  - ${_IMAGE}
+
+substitutions:
+  _REGION: europe-west3
+  _SERVICE: sona-api
+  _IMAGE: europe-west3-docker.pkg.dev/$PROJECT_ID/sona/sona-api:$COMMIT_SHA
+
+timeout: 1800s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
