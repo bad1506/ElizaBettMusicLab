@@ -192,7 +192,9 @@ class S3StorageBackend(LocalStorageBackend):
                 delay = min(delay * 2, 2.0)
 
     def _key(self, user_id: str, relative: Path) -> str:
-        return "/".join(part for part in (self.prefix, "user_data", _safe_user_id(user_id), relative.as_posix().lstrip("/")) if part)
+        relative_text = relative.as_posix().lstrip("/")
+        parts = (self.prefix, "user_data", _safe_user_id(user_id), relative_text)
+        return "/".join(part for part in parts if part and part != ".")
 
     def _meta_path(self, root: Path, relative: Path) -> Path:
         return root / _META_DIR / (relative.as_posix() + ".json")
