@@ -1,4 +1,12 @@
 steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud artifacts repositories describe sona --location=${_REGION} >/dev/null 2>&1 || \
+        gcloud artifacts repositories create sona --repository-format=docker --location=${_REGION} --description="SØNA container images"
+
   - name: gcr.io/cloud-builders/docker
     args:
       - build
