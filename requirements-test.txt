@@ -1,0 +1,3 @@
+# Test-only dependencies for CI and local backend test runs.
+pytest>=7,<9
+PyYAML>=6,<7
