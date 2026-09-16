@@ -6,20 +6,26 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
-import ai_assistant
-
 
 ToolExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 class OpenAIProvider:
-    """Адаптер текущего OpenAI-слоя проекта без изменения его API."""
+    """Независимый адаптер OpenAI Responses API для SØNA Agent Runtime."""
 
     name = "openai"
 
+    @staticmethod
+    def _model() -> str:
+        return os.getenv("OPENAI_MODEL", "gpt-5.6").strip() or "gpt-5.6"
+
     def generate(self, *, system: str, messages: list[dict[str, Any]]) -> str:
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured")
+        endpoint = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/") + "/responses"
         payload = {
-            "model": ai_assistant._openai_model(),
+            "model": self._model(),
             "store": False,
             "tools": [{"type": "web_search"}],
             "input": [
@@ -27,7 +33,7 @@ class OpenAIProvider:
                 *messages,
             ],
         }
-        return ai_assistant._openai(payload, 120)
+        return self._extract_text(self._request(endpoint, api_key, payload))
 
     def generate_with_tools(
         self,
@@ -49,7 +55,7 @@ class OpenAIProvider:
 
         endpoint = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/") + "/responses"
         payload: dict[str, Any] = {
-            "model": ai_assistant._openai_model(),
+            "model": self._model(),
             "store": False,
             "instructions": system,
             "tools": [{"type": "web_search"}, *tools],
@@ -102,7 +108,7 @@ class OpenAIProvider:
             if not response_id:
                 raise RuntimeError("OpenAI response id is missing")
             payload = {
-                "model": ai_assistant._openai_model(),
+                "model": self._model(),
                 "store": False,
                 "previous_response_id": response_id,
                 "tools": [{"type": "web_search"}, *tools],
