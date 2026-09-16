@@ -1,0 +1,22 @@
+# Generated / dependency directories
+.git/
+node_modules/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.vite/
+dist/
+build/
+
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Large/generated runtime data
+storage/
+outputs/
+logs/
