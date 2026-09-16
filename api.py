@@ -65,7 +65,9 @@ def auth_login(request: AuthRequest, response: Response):
         raise HTTPException(401, str(exc)) from exc
 
 @app.post("/auth/logout")
-def auth_logout(response: Response):
+def auth_logout(request: FastAPIRequest, response: Response):
+    token = _token(request)
+    web_auth.revoke_session(token)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 
