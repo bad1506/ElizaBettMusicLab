@@ -1,0 +1,82 @@
+name: Deploy SØNA to Yandex Cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sona-yandex-production
+  cancel-in-progress: true
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build and deploy SØNA API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get Yandex Cloud IAM token
+        id: get-iam-token
+        uses: docker://ghcr.io/yc-actions/yc-iam-token-fed:1.0.0
+        with:
+          yc-sa-id: ${{ vars.YC_SA_ID }}
+
+      - name: Login to Yandex Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: cr.yandex
+          username: iam
+          password: ${{ steps.get-iam-token.outputs.token }}
+
+      - name: Build and push image
+        env:
+          REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
+        run: |
+          set -euo pipefail
+          IMAGE="cr.yandex/${REGISTRY_ID}/sona:${IMAGE_TAG}"
+          docker build --pull -t "${IMAGE}" .
+          docker push "${IMAGE}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+
+      - name: Deploy Serverless Container
+        id: deploy
+        uses: yc-actions/yc-sls-container-deploy@v5
+        with:
+          yc-sa-id: ${{ vars.YC_SA_ID }}
+          container-name: sona-api
+          folder-id: ${{ vars.YC_FOLDER_ID }}
+          public: true
+          revision-service-account-id: ${{ vars.YC_RUNTIME_SA_ID }}
+          revision-cores: 2
+          revision-memory: 2Gb
+          revision-core-fraction: 100
+          revision-concurrency: 10
+          revision-image-url: ${{ env.IMAGE }}
+          revision-execution-timeout: 900
+          revision-env: |
+            PORT=8080
+            ENABLE_API_DOCS=false
+            SONA_STORAGE_PROVIDER=s3
+            SONA_DATA_DIR=/tmp/sona
+          revision-secrets: |
+            OPENAI_API_KEY=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/OPENAI_API_KEY
+            TELEGRAM_BOT_TOKEN=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/TELEGRAM_BOT_TOKEN
+            SONA_S3_ENDPOINT=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/SONA_S3_ENDPOINT
+            SONA_S3_BUCKET=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/SONA_S3_BUCKET
+            SONA_S3_REGION=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/SONA_S3_REGION
+            SONA_S3_ACCESS_KEY_ID=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/SONA_S3_ACCESS_KEY_ID
+            SONA_S3_SECRET_ACCESS_KEY=${{ vars.YC_LOCKBOX_SECRET_ID }}/latest/SONA_S3_SECRET_ACCESS_KEY
+
+      - name: Report deployment
+        run: |
+          echo "Deployed revision: ${{ steps.deploy.outputs.rev }}"
+          echo "Container: ${{ steps.deploy.outputs.id }}"
