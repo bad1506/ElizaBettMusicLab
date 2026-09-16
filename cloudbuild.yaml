@@ -45,5 +45,7 @@ substitutions:
   _SERVICE: sona-api
   _IMAGE: europe-west3-docker.pkg.dev/$PROJECT_ID/sona/sona-api:$COMMIT_SHA
 
+timeout: 1800s
+
 options:
   logging: CLOUD_LOGGING_ONLY
