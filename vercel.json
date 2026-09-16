@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/public/yandex-chart",
-      "destination": "/api/yandex-chart"
+      "destination": "https://elizabettmusiclab-1.onrender.com/public/yandex-chart"
     },
     {
       "source": "/api/:path*",
