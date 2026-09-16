@@ -42,6 +42,8 @@ class StorageBackend(Protocol):
 
     def sync_tree(self, user_id: str, root: Path, *, prefix: str | None = None) -> SyncResult: ...
 
+    def delete_files(self, user_id: str, paths: list[Path]) -> int: ...
+
 
 class _WorkspaceLock:
     def __init__(self, root: Path):
@@ -146,6 +148,9 @@ class LocalStorageBackend:
 
     def sync_tree(self, user_id: str, root: Path, *, prefix: str | None = None) -> SyncResult:
         return SyncResult(uploaded=sum(1 for p in root.rglob("*") if _is_syncable(p)))
+
+    def delete_files(self, user_id: str, paths: list[Path]) -> int:
+        return 0
 
 
 class S3StorageBackend(LocalStorageBackend):
@@ -275,6 +280,29 @@ class S3StorageBackend(LocalStorageBackend):
                 modified = None
             self._write_meta(root, relative, {"etag": etag, "size": size, "last_modified": str(modified or ""), "synced_at": _utc_now().isoformat()})
         return SyncResult(uploaded=1)
+
+    def delete_files(self, user_id: str, paths: list[Path]) -> int:
+        root = self.user_root(user_id)
+        relatives: list[Path] = []
+        for path in paths:
+            relative = _safe_relative(root, path)
+            if relative not in relatives:
+                relatives.append(relative)
+        if not relatives:
+            return 0
+        deleted = 0
+        with _WorkspaceLock(root):
+            client = self._client()
+            for offset in range(0, len(relatives), 1000):
+                batch = relatives[offset:offset + 1000]
+                response = self._call(client.delete_objects, Bucket=self.bucket, Delete={"Objects": [{"Key": self._key(user_id, relative)} for relative in batch], "Quiet": True})
+                errors = response.get("Errors", []) if isinstance(response, dict) else []
+                if errors:
+                    raise RuntimeError("Remote storage deletion failed")
+                deleted += len(batch)
+                for relative in batch:
+                    self._meta_path(root, relative).unlink(missing_ok=True)
+        return deleted
 
     def sync_tree(self, user_id: str, root: Path, *, prefix: str | None = None) -> SyncResult:
         workspace = self.user_root(user_id)
