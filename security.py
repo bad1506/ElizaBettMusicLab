@@ -54,8 +54,11 @@ def _persist_workspace(base: Path, root: Path, before: dict[str, tuple[int, int]
     backend = get_storage_backend(base)
     after = _workspace_snapshot(root)
     changed = [Path(path) for path, stamp in after.items() if before.get(path) != stamp]
+    deleted = [Path(path) for path in before if path not in after]
     for path in changed:
         backend.sync_file(current_user_id(), path)
+    if deleted:
+        backend.delete_files(current_user_id(), deleted)
 
 
 def security_middleware(app):
