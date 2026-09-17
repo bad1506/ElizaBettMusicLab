@@ -1,0 +1,33 @@
+name: Billing reconciliation
+
+on:
+  schedule:
+    # GitHub Actions schedules run from the default branch after merge.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: Reconcile YooKassa payments
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reconcile pending payments
+        env:
+          SONA_BILLING_API_URL: ${{ secrets.SONA_BILLING_API_URL }}
+          SONA_BILLING_ADMIN_KEY: ${{ secrets.SONA_BILLING_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SONA_BILLING_API_URL"
+          test -n "$SONA_BILLING_ADMIN_KEY"
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 10 --max-time 60 \
+            -X POST \
+            -H "X-Billing-Admin-Key: $SONA_BILLING_ADMIN_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"limit":50}' \
+            "${SONA_BILLING_API_URL%/}/billing/admin/reconcile"
