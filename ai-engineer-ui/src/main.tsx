@@ -2,7 +2,7 @@ import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './glass-interactions.css'
-import './SonaSferoomChat.css'
+import './SferoomChat.css'
 import './SonaCommercialFixes.css'
 import './sona-cursor-glow.css'
 import './SonaAbout.css'
@@ -22,12 +22,13 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const isRelativeApi = originalUrl.startsWith('/api/') || originalUrl === '/api'
   const rewrittenUrl = isRelativeApi && api !== '/api' ? `${api}${originalUrl.slice(4)}` : originalUrl
   const path = (() => { try { return new URL(originalUrl, window.location.origin).pathname } catch { return originalUrl } })()
+  const endpointPath = path.startsWith('/api/') ? path.slice(4) : path
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = isRelativeApi || originalUrl.startsWith(api)
   // Only genuinely public endpoints bypass account authentication. Feature APIs such as
   // songwriter/trends consume paid/free quotas and must carry the account token (or Telegram auth).
-  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/agents/skills'
+  const isPublicRequest = endpointPath === '/auth/register' || endpointPath === '/auth/login' || endpointPath === '/auth/telegram' || endpointPath === '/public/yandex-chart' || endpointPath === '/health' || endpointPath === '/agents/skills'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
