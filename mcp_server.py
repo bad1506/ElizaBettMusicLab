@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from agents.tools import execute_tool, list_tools
 from agents.tools.base import ToolError
@@ -27,25 +28,28 @@ def _jsonrpc_error(request_id: Any, code: int, message: str) -> JSONResponse:
 
 
 def _tool_catalog() -> list[dict[str, Any]]:
-    result = []
-    for tool in list_tools():
-        result.append(
-            {
-                "name": tool["name"],
-                "description": tool["description"],
-                "inputSchema": tool["input"],
-            }
-        )
-    return result
+    return [
+        {
+            "name": tool["name"],
+            "description": tool["description"],
+            "inputSchema": tool["input"],
+        }
+        for tool in list_tools()
+    ]
 
 
 @router.post("/mcp")
 async def mcp_http(request: Request):
-    """Stateless MCP Streamable HTTP endpoint for the SØNA Agent.
+    """Stateless MCP Streamable HTTP endpoint for SØNA Agent clients.
 
-    Authentication and per-user storage are provided by the existing security
-    middleware. Tool execution is delegated to the existing allowlisted tool
-    registry, so MCP cannot bypass SØNA's tool boundary.
+    Authentication, per-user storage, rate limiting and the user context are
+    provided by the existing security middleware. Therefore an MCP request
+    without a valid account session (or Telegram auth) is rejected before this
+    handler runs in production. Tool execution is delegated to the same
+    allowlisted registry used by the internal SØNA Agent Runtime.
+
+    The endpoint is intentionally stateless: it returns JSON MCP responses and
+    does not advertise server-to-client SSE streams.
     """
     try:
         payload = await request.json()
@@ -73,7 +77,7 @@ async def mcp_http(request: Request):
         )
 
     if method == "notifications/initialized":
-        return JSONResponse(status_code=202, content=None)
+        return Response(status_code=202)
 
     if method == "ping":
         return _jsonrpc_result(request_id, {})
@@ -105,6 +109,4 @@ async def mcp_http(request: Request):
 
 
 def _serialize_result(value: Any) -> str:
-    import json
-
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
