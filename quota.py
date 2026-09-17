@@ -42,21 +42,34 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def _ydb():
-    from ydb_store import get_store
-    return get_store()
+def _subscription(user_id: str) -> dict:
+    if DB_PROVIDER == "ydb":
+        row = _ydb().get_subscription(user_id)
+        return row or {"plan": "free", "status": "active", "period_end": ""}
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT plan,status,period_end FROM subscriptions WHERE user_id=?", (user_id,)).fetchone()
+    finally:
+        conn.close()
+    return {"plan": str(row[0]), "status": str(row[1]), "period_end": str(row[2] or "")} if row else {"plan": "free", "status": "active", "period_end": ""}
 
 
 def _plan_for(user_id: str) -> str:
-    if DB_PROVIDER == "ydb":
-        row = _ydb().get_subscription(user_id)
-        return str(row.get("plan") or "free") if row else "free"
-    conn = _connect()
-    try:
-        row = conn.execute("SELECT plan FROM subscriptions WHERE user_id=?", (user_id,)).fetchone()
-    finally:
-        conn.close()
-    return str(row[0]) if row and row[0] in PLANS else "free"
+    subscription = _subscription(user_id)
+    plan = str(subscription.get("plan") or "free")
+    if plan not in PLANS or plan == "free":
+        return "free"
+    if str(subscription.get("status") or "active").lower() not in {"active", "paid"}:
+        return "free"
+    period_end = str(subscription.get("period_end") or "").strip()
+    if period_end:
+        try:
+            expiry = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
+            if expiry <= datetime.now(timezone.utc):
+                return "free"
+        except ValueError:
+            return "free"
+    return plan
 
 
 def plan_catalog() -> dict[str, dict[str, int | str]]:
@@ -64,6 +77,7 @@ def plan_catalog() -> dict[str, dict[str, int | str]]:
 
 
 def usage(user_id: str) -> dict:
+    subscription = _subscription(user_id)
     plan = _plan_for(user_id)
     limits = PLANS[plan]
     month = _month_key()
@@ -80,6 +94,8 @@ def usage(user_id: str) -> dict:
     return {
         "plan": plan,
         "plan_name": limits["name"],
+        "subscription_status": subscription.get("status", "active") if plan != "free" else "free",
+        "period_end": subscription.get("period_end") or None,
         "month": month,
         "period": {"start": _period()[0], "end": _period()[1]},
         "features": {feature: {"used": used.get(feature, 0), "limit": int(limits[feature]), "remaining": max(0, int(limits[feature]) - used.get(feature, 0))} for feature in FEATURES},
@@ -148,3 +164,8 @@ class QuotaExceeded(Exception):
         self.feature = feature
         self.item = item
         super().__init__(f"Monthly quota exceeded for {feature}")
+
+
+def _ydb():
+    from ydb_store import get_store
+    return get_store()
