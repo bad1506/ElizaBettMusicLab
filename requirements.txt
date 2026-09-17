@@ -13,5 +13,6 @@ ydb
 fastapi
 uvicorn
 python-multipart
+httpx
 
 demucs
