@@ -43,7 +43,7 @@ def test_webhook_reverifies_successful_payment(monkeypatch):
         return payment
 
     monkeypatch.setattr(billing_yookassa, "get_payment", fake_get_payment)
-    monkeypatch.setattr(billing_yookassa.quota, "activate_payment", lambda payment_id, user_id, plan, period_end: (True, {"plan": plan, "status": "active", "period_end": period_end}))
+    monkeypatch.setattr(billing_yookassa.billing_activation, "activate_payment", lambda payment_id, user_id, plan: (True, {"plan": plan, "status": "active", "period_end": "test"}))
     result = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": "payment-2"}})
     assert called["id"] == "payment-2"
     assert result["activated"] is True
