@@ -32,6 +32,7 @@ class YDBStore:
             f'''CREATE TABLE IF NOT EXISTS `{self._table("subscriptions")}` (user_id Utf8 NOT NULL, plan Utf8 NOT NULL, status Utf8 NOT NULL, period_end Utf8 NOT NULL, updated_at Utf8 NOT NULL, PRIMARY KEY (user_id));''',
             f'''CREATE TABLE IF NOT EXISTS `{self._table("usage_monthly")}` (user_id Utf8 NOT NULL, month Utf8 NOT NULL, feature Utf8 NOT NULL, used Int64 NOT NULL, PRIMARY KEY (user_id, month, feature));''',
             f'''CREATE TABLE IF NOT EXISTS `{self._table("billing_payments")}` (payment_id Utf8 NOT NULL, user_id Utf8 NOT NULL, plan Utf8 NOT NULL, claimed_at Utf8 NOT NULL, PRIMARY KEY (payment_id));''',
+            f'''CREATE TABLE IF NOT EXISTS `{self._table("billing_pending")}` (payment_id Utf8 NOT NULL, user_id Utf8 NOT NULL, plan Utf8 NOT NULL, status Utf8 NOT NULL, created_at Utf8 NOT NULL, updated_at Utf8 NOT NULL, PRIMARY KEY (payment_id));''',
         ]
         for statement in statements: self._pool.execute_with_retries(statement)
     def _rows(self, query: str, params: dict | None = None):
@@ -89,6 +90,12 @@ class YDBStore:
                 except Exception:pass
                 raise
         return self._pool.retry_operation_sync(operation)
+    def record_pending_payment(self,payment_id,user_id,plan,status,updated_at):
+        self._pool.execute_with_retries(f"UPSERT INTO `{self._table('billing_pending')}` (payment_id,user_id,plan,status,created_at,updated_at) VALUES ($payment_id,$user_id,$plan,$status,$created_at,$updated_at);",{"$payment_id":payment_id,"$user_id":user_id,"$plan":plan,"$status":status,"$created_at":updated_at,"$updated_at":updated_at})
+    def pending_payments(self,limit=100):
+        rows=self._rows(f"SELECT payment_id,user_id,plan,status,created_at,updated_at FROM `{self._table('billing_pending')}` WHERE status IN ('pending','waiting_for_capture') ORDER BY created_at ASC LIMIT $limit;",{"$limit":max(1,min(int(limit),100))})
+        return [{"payment_id":r.payment_id,"user_id":r.user_id,"plan":r.plan,"status":r.status,"created_at":r.created_at,"updated_at":r.updated_at} for r in rows]
+    def mark_pending_payment(self,payment_id,status,updated_at):self._pool.execute_with_retries(f"UPDATE `{self._table('billing_pending')}` SET status=$status,updated_at=$updated_at WHERE payment_id=$payment_id;",{"$payment_id":payment_id,"$status":status,"$updated_at":updated_at})
     def activate_billing_payment(self,payment_id,user_id,plan,period_end,updated_at):
         def operation(session):
             tx=session.transaction().begin()
@@ -100,6 +107,7 @@ class YDBStore:
                         return False
                 with tx.execute(f"INSERT INTO `{self._table('billing_payments')}` (payment_id,user_id,plan,claimed_at) VALUES ($payment_id,$user_id,$plan,$claimed_at);",{"$payment_id":payment_id,"$user_id":user_id,"$plan":plan,"$claimed_at":updated_at}):pass
                 with tx.execute(f"UPSERT INTO `{self._table('subscriptions')}` (user_id,plan,status,period_end,updated_at) VALUES ($user_id,$plan,$status,$period_end,$updated_at);",{"$user_id":user_id,"$plan":plan,"$status":"active","$period_end":period_end,"$updated_at":updated_at}):pass
+                with tx.execute(f"UPDATE `{self._table('billing_pending')}` SET status=$status,updated_at=$updated_at WHERE payment_id=$payment_id;",{"$payment_id":payment_id,"$status":"succeeded","$updated_at":updated_at}):pass
                 tx.commit()
                 return True
             except Exception:
