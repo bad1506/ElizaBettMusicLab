@@ -38,6 +38,7 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("CREATE TABLE IF NOT EXISTS subscriptions (user_id TEXT PRIMARY KEY, plan TEXT NOT NULL, status TEXT NOT NULL, period_end TEXT, updated_at TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS usage_monthly (user_id TEXT NOT NULL, month TEXT NOT NULL, feature TEXT NOT NULL, used INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, month, feature))")
+    conn.execute("CREATE TABLE IF NOT EXISTS billing_payments (payment_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, plan TEXT NOT NULL, claimed_at TEXT NOT NULL)")
     conn.commit()
     return conn
 
@@ -91,16 +92,7 @@ def usage(user_id: str) -> dict:
         finally:
             conn.close()
         used = {str(row["feature"]): int(row["used"]) for row in rows}
-    return {
-        "plan": plan,
-        "plan_name": limits["name"],
-        "subscription_status": subscription.get("status", "active") if plan != "free" else "free",
-        "period_end": subscription.get("period_end") or None,
-        "month": month,
-        "period": {"start": _period()[0], "end": _period()[1]},
-        "features": {feature: {"used": used.get(feature, 0), "limit": int(limits[feature]), "remaining": max(0, int(limits[feature]) - used.get(feature, 0))} for feature in FEATURES},
-        "storage_mb": int(limits["storage_mb"]),
-    }
+    return {"plan": plan, "plan_name": limits["name"], "subscription_status": subscription.get("status", "active") if plan != "free" else "free", "period_end": subscription.get("period_end") or None, "month": month, "period": {"start": _period()[0], "end": _period()[1]}, "features": {feature: {"used": used.get(feature, 0), "limit": int(limits[feature]), "remaining": max(0, int(limits[feature]) - used.get(feature, 0))} for feature in FEATURES}, "storage_mb": int(limits["storage_mb"])}
 
 
 def check(user_id: str, feature: str, units: int = 1) -> tuple[bool, dict]:
@@ -157,6 +149,20 @@ def set_plan(user_id: str, plan: str, status: str = "active", period_end: str | 
         finally:
             conn.close()
     return usage(user_id)
+
+
+def claim_payment(payment_id: str, user_id: str, plan: str) -> bool:
+    if not payment_id or plan not in PLANS or plan == "free":
+        return False
+    if DB_PROVIDER == "ydb":
+        return bool(_ydb().claim_billing_payment(payment_id, user_id, plan))
+    conn = _connect()
+    try:
+        cursor = conn.execute("INSERT OR IGNORE INTO billing_payments(payment_id,user_id,plan,claimed_at) VALUES(?,?,?,?)", (payment_id, user_id, plan, datetime.now(timezone.utc).isoformat()))
+        conn.commit()
+        return cursor.rowcount == 1
+    finally:
+        conn.close()
 
 
 class QuotaExceeded(Exception):
