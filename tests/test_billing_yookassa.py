@@ -22,11 +22,13 @@ def test_create_checkout_uses_idempotency_and_metadata(monkeypatch):
         return {"id": "payment-1", "status": "pending", "confirmation": {"confirmation_url": "https://yookassa.test/pay"}}
 
     monkeypatch.setattr(billing_yookassa, "_request", fake_request)
+    monkeypatch.setattr(quota, "record_pending_payment", lambda *args: captured.update(pending=args))
     result = billing_yookassa.create_checkout("user-1", "pro")
     payload = captured["kwargs"]["json"]
     assert result["payment_id"] == "payment-1"
     assert payload["metadata"] == {"user_id": "user-1", "plan": "pro", "service": "sona"}
     assert captured["kwargs"]["_header_args"]["idempotency_key"]
+    assert captured["pending"] == ("payment-1", "user-1", "pro", "pending")
 
 
 def test_webhook_reverifies_successful_payment(monkeypatch):
@@ -101,3 +103,57 @@ def test_concurrent_duplicate_webhooks_only_activate_once(monkeypatch, tmp_path)
         conn.close()
     assert payment_count == 1
     assert subscription_count == 1
+
+
+def test_reconcile_pending_succeeded_payment_activates_once(monkeypatch, tmp_path):
+    _use_temp_sqlite(monkeypatch, tmp_path)
+    monkeypatch.setenv("YUKASSA_SHOP_ID", "shop")
+    monkeypatch.setenv("YUKASSA_SECRET_KEY", "secret")
+    quota.record_pending_payment("payment-reconcile", "user-reconcile", "creator", "pending")
+    payment = {"id": "payment-reconcile", "status": "succeeded", "metadata": {"user_id": "user-reconcile", "plan": "creator"}, "amount": {"value": "990.00", "currency": "RUB"}}
+    monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
+
+    first = billing_yookassa.reconcile_pending()
+    second = billing_yookassa.reconcile_pending()
+
+    assert first["checked"] == 1
+    assert first["activated"] == 1
+    assert second["checked"] == 0
+    assert quota.usage("user-reconcile")["plan"] == "creator"
+    conn = sqlite3.connect(quota.SQLITE_PATH)
+    try:
+        assert conn.execute("SELECT status FROM billing_pending WHERE payment_id=?", ("payment-reconcile",)).fetchone()[0] == "succeeded"
+        assert conn.execute("SELECT COUNT(*) FROM billing_payments WHERE payment_id=?", ("payment-reconcile",)).fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+def test_reconcile_canceled_payment_closes_pending_record(monkeypatch, tmp_path):
+    _use_temp_sqlite(monkeypatch, tmp_path)
+    monkeypatch.setenv("YUKASSA_SHOP_ID", "shop")
+    monkeypatch.setenv("YUKASSA_SECRET_KEY", "secret")
+    quota.record_pending_payment("payment-canceled", "user-canceled", "pro", "pending")
+    payment = {"id": "payment-canceled", "status": "canceled", "metadata": {"user_id": "user-canceled", "plan": "pro"}, "amount": {"value": "1990.00", "currency": "RUB"}}
+    monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
+
+    result = billing_yookassa.reconcile_pending()
+
+    assert result["checked"] == 1
+    assert result["canceled"] == 1
+    assert quota.pending_payments() == []
+
+
+def test_reconcile_rejects_amount_or_metadata_mismatch(monkeypatch, tmp_path):
+    _use_temp_sqlite(monkeypatch, tmp_path)
+    monkeypatch.setenv("YUKASSA_SHOP_ID", "shop")
+    monkeypatch.setenv("YUKASSA_SECRET_KEY", "secret")
+    quota.record_pending_payment("payment-mismatch", "user-mismatch", "studio", "pending")
+    payment = {"id": "payment-mismatch", "status": "succeeded", "metadata": {"user_id": "user-mismatch", "plan": "studio"}, "amount": {"value": "1.00", "currency": "RUB"}}
+    monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
+
+    result = billing_yookassa.reconcile_pending()
+
+    assert result["checked"] == 1
+    assert result["errors"] == 1
+    assert quota.pending_payments() == []
+    assert quota.usage("user-mismatch")["plan"] == "free"
