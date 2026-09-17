@@ -19,8 +19,8 @@ services:
         value: grpcs://ydb.serverless.yandexcloud.net:2135
       - key: YDB_DATABASE
         sync: false
-      - key: YDB_ACCESS_TOKEN_CREDENTIALS
-        sync: false
+      - key: YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS
+        value: /etc/secrets/ydb-sa.json
       - key: YDB_TABLE_PREFIX
         value: sona
       - key: SONA_STORAGE_PROVIDER
@@ -31,10 +31,6 @@ services:
         sync: false
       - key: SONA_S3_REGION
         value: ru-central1
-      - key: SONA_S3_ACCESS_KEY_ID
-        sync: false
-      - key: SONA_S3_SECRET_ACCESS_KEY
-        sync: false
       - key: SONA_S3_PREFIX
         value: sona
       - key: SONA_S3_MAX_ATTEMPTS
