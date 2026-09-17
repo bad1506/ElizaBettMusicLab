@@ -163,12 +163,11 @@ def activate_payment(payment_id: str, user_id: str, plan: str, period_end: str) 
         conn = _connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            existing = conn.execute("SELECT payment_id FROM billing_payments WHERE payment_id=?", (payment_id,)).fetchone()
-            if existing:
+            cursor = conn.execute("INSERT OR IGNORE INTO billing_payments(payment_id,user_id,plan,claimed_at) VALUES(?,?,?,?)", (payment_id, user_id, plan, datetime.now(timezone.utc).isoformat()))
+            if cursor.rowcount == 0:
                 conn.rollback()
                 return False, usage(user_id)
-            conn.execute("INSERT INTO billing_payments(payment_id,user_id,plan,claimed_at) VALUES(?,?,?,?)", (payment_id,user_id,plan,datetime.now(timezone.utc).isoformat()))
-            conn.execute("INSERT INTO subscriptions(user_id,plan,status,period_end,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,period_end=excluded.period_end,updated_at=excluded.updated_at", (user_id,plan,"active",period_end,now))
+            conn.execute("INSERT INTO subscriptions(user_id,plan,status,period_end,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,period_end=excluded.period_end,updated_at=excluded.updated_at", (user_id, plan, "active", period_end, now))
             conn.commit()
         except Exception:
             conn.rollback()
