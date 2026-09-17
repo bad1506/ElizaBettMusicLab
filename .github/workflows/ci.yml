@@ -86,6 +86,7 @@ jobs:
           secure = declared_routes("api_secure.py")
           chat = declared_routes("chat_api.py")
           api = declared_routes("api.py")
+          mcp = declared_routes("mcp_server.py")
 
           required_secure = {
               ("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"),
@@ -107,17 +108,19 @@ jobs:
               ("GET", "/agents"), ("GET", "/agents/tools"), ("POST", "/agents/tools/invoke"),
               ("POST", "/agents/invoke"),
           }
+          required_mcp = {("POST", "/mcp")}
 
           checks = {
               "api_secure.py": (secure, required_secure),
               "chat_api.py": (chat, required_chat),
               "api.py": (api, required_api),
+              "mcp_server.py": (mcp, required_mcp),
           }
           for filename, (actual, required) in checks.items():
               missing = sorted(required - actual)
               if missing:
                   raise SystemExit(f"Missing API routes in {filename}: {missing}")
-          print(f"Validated routes: secure={len(secure)}, chat={len(chat)}, api={len(api)}")
+          print(f"Validated routes: secure={len(secure)}, chat={len(chat)}, api={len(api)}, mcp={len(mcp)}")
           PY
       - name: Validate billing contract
         run: |
