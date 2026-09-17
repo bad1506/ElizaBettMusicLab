@@ -45,6 +45,20 @@ services:
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+      - key: SONA_BILLING_ADMIN_KEY
+        sync: false
+      - key: YUKASSA_SHOP_ID
+        sync: false
+      - key: YUKASSA_SECRET_KEY
+        sync: false
+      - key: YUKASSA_RETURN_URL
+        sync: false
+      - key: SONA_CREATOR_PRICE_RUB
+        value: "990"
+      - key: SONA_PRO_PRICE_RUB
+        value: "1990"
+      - key: SONA_STUDIO_PRICE_RUB
+        value: "4990"
       - key: PROMPTS_CHAT_API_URL
         value: https://prompts.chat/api/prompts
       - key: PROMPTS_CHAT_ENABLED
