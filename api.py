@@ -50,6 +50,9 @@ class CheckoutRequest(BaseModel):
     plan: str = Field(pattern=r"^(creator|pro|studio)$")
     return_url: str | None = Field(default=None, max_length=1000)
 
+class BillingReconcileRequest(BaseModel):
+    limit: int = Field(default=50, ge=1, le=100)
+
 
 def _token(request: FastAPIRequest) -> str:
     header = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
@@ -116,6 +119,17 @@ async def billing_yookassa_webhook(request: FastAPIRequest):
         return billing_yookassa.handle_webhook(event)
     except billing_yookassa.YooKassaError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+@app.post("/billing/admin/reconcile")
+def billing_admin_reconcile(request: FastAPIRequest, payload: BillingReconcileRequest):
+    configured = os.getenv("SONA_BILLING_ADMIN_KEY", "").strip()
+    supplied = request.headers.get("X-Billing-Admin-Key", "").strip()
+    if not configured or supplied != configured:
+        raise HTTPException(403, "Billing administration is not authorized")
+    try:
+        return {"ok": True, "reconciliation": billing_yookassa.reconcile_pending(payload.limit)}
+    except billing_yookassa.YooKassaError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 @app.post("/billing/admin/activate")
 def billing_admin_activate(request: FastAPIRequest, payload: PlanActivationRequest):
