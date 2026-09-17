@@ -1,0 +1,33 @@
+/* Keep account access in the header instead of competing with SØNA Assistant. */
+#sona-account-root {
+  position: fixed !important;
+  top: 18px !important;
+  right: 220px !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 2147483001 !important;
+  font-family: inherit !important;
+}
+#sona-account-root .sona-account-btn {
+  border: 1px solid rgba(20,20,20,.12) !important;
+  background: rgba(255,255,255,.82) !important;
+  color: #171717 !important;
+  border-radius: 999px !important;
+  padding: 10px 15px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+@media (max-width: 720px) {
+  #sona-account-root {
+    top: 15px !important;
+    right: 154px !important;
+  }
+  #sona-account-root .sona-account-btn {
+    padding: 9px 12px !important;
+    font-size: 11px !important;
+  }
+}
