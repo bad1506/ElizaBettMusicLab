@@ -1,6 +1,5 @@
 const API = (import.meta as any).env?.VITE_API_URL || "/api";
 
-type User = { id: string; name?: string; email?: string };
 type Plan = { key: string; name?: string; price_rub?: number; features?: Record<string, { limit?: number }>; storage_mb?: number };
 
 const KEY = "sona_token";
@@ -39,7 +38,7 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 function rub(value: number) { return new Intl.NumberFormat("ru-RU").format(value) + " ₽/мес"; }
-function esc(value: unknown) { return String(value ?? "").replace(/[&<>\"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch] || ch)); }
+function esc(value: unknown) { const map: Record<string, string> = { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;" }; return String(value ?? "").replace(/[&<>\"]/g, ch => map[ch] || ch); }
 
 function root() {
   let node = document.getElementById("sona-account-root");
@@ -126,7 +125,6 @@ async function checkout(plan: string) {
 
 async function checkReturn() {
   if (!new URLSearchParams(window.location.search).has("billing")) return;
-  localStorage.getItem(PAYMENT_KEY);
   for (let i = 0; i < 6; i++) {
     const me = await loadMe();
     if (me?.billing && me.billing.plan !== "free") { await accountView(); return; }
