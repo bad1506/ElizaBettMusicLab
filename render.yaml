@@ -1,19 +1,65 @@
 services:
   - type: web
     name: eliza-bett-music-lab-api
-    runtime: python
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
+    autoDeploy: false
     envVars:
-      - key: CORS_ORIGINS
-        value: https://eliza-bett-music-lab.vercel.app
+      - key: PORT
+        value: "8080"
+      - key: ENABLE_API_DOCS
+        value: "false"
       - key: DEMUCS_DEVICE
         value: cpu
-      - key: SONA_DATA_DIR
-        value: /var/data/sona
-    disk:
-      name: sona-data
-      mountPath: /var/data
-      sizeGB: 10
+      - key: SONA_DB_PROVIDER
+        value: ydb
+      - key: YDB_ENDPOINT
+        value: grpcs://ydb.serverless.yandexcloud.net:2135
+      - key: YDB_DATABASE
+        sync: false
+      - key: YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS
+        value: /etc/secrets/ydb-sa.json
+      - key: YDB_TABLE_PREFIX
+        value: sona
+      - key: SONA_STORAGE_PROVIDER
+        value: s3
+      - key: SONA_S3_ENDPOINT
+        value: https://storage.yandexcloud.net
+      - key: SONA_S3_BUCKET
+        sync: false
+      - key: SONA_S3_REGION
+        value: ru-central1
+      - key: SONA_S3_PREFIX
+        value: sona
+      - key: SONA_S3_MAX_ATTEMPTS
+        value: "4"
+      - key: SONA_S3_HYDRATE_TTL
+        value: "30"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      - key: CORS_ORIGINS
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SONA_BILLING_ADMIN_KEY
+        sync: false
+      - key: YUKASSA_SHOP_ID
+        sync: false
+      - key: YUKASSA_SECRET_KEY
+        sync: false
+      - key: YUKASSA_RETURN_URL
+        sync: false
+      - key: SONA_CREATOR_PRICE_RUB
+        value: "990"
+      - key: SONA_PRO_PRICE_RUB
+        value: "1990"
+      - key: SONA_STUDIO_PRICE_RUB
+        value: "4990"
+      - key: PROMPTS_CHAT_API_URL
+        value: https://prompts.chat/api/prompts
+      - key: PROMPTS_CHAT_ENABLED
+        value: "true"
