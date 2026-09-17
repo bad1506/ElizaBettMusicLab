@@ -34,3 +34,5 @@ def test_quota_rejects_when_limit_reached():
                 assert exc.feature == "chat"
         finally:
             quota.SQLITE_PATH = old_path
+
+# CI trigger: validate the current production billing/quota HEAD.
