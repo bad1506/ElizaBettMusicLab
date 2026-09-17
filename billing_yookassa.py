@@ -40,11 +40,7 @@ def _auth() -> tuple[str, str]:
 def _headers(*, idempotency_key: str | None = None) -> dict[str, str]:
     shop, secret = _auth()
     token = base64.b64encode(f"{shop}:{secret}".encode()).decode()
-    headers = {
-        "Authorization": f"Basic {token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json", "Accept": "application/json"}
     if idempotency_key:
         headers["Idempotence-Key"] = idempotency_key
     return headers
@@ -52,13 +48,7 @@ def _headers(*, idempotency_key: str | None = None) -> dict[str, str]:
 
 def _request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     try:
-        response = httpx.request(
-            method,
-            f"{API}{path}",
-            headers=_headers(**kwargs.pop("_header_args", {})),
-            timeout=20,
-            **kwargs,
-        )
+        response = httpx.request(method, f"{API}{path}", headers=_headers(**kwargs.pop("_header_args", {})), timeout=20, **kwargs)
     except httpx.HTTPError as exc:
         raise YooKassaError("Платёжный сервис временно недоступен.") from exc
     if response.status_code >= 400:
@@ -87,23 +77,12 @@ def create_checkout(user_id: str, plan: str, return_url: str | None = None) -> d
         "description": f"SØNA Music Intelligence — {quota.PLANS[plan]['name']} на 1 месяц",
         "metadata": {"user_id": str(user_id), "plan": plan, "service": "sona"},
     }
-    payment = _request(
-        "POST",
-        "/payments",
-        json=payload,
-        _header_args={"idempotency_key": str(uuid.uuid4())},
-    )
+    payment = _request("POST", "/payments", json=payload, _header_args={"idempotency_key": str(uuid.uuid4())})
     confirmation = payment.get("confirmation") or {}
     confirmation_url = confirmation.get("confirmation_url")
     if not confirmation_url:
         raise YooKassaError("Не удалось получить ссылку на оплату.")
-    return {
-        "payment_id": payment.get("id"),
-        "status": payment.get("status"),
-        "confirmation_url": confirmation_url,
-        "amount_rub": amount,
-        "plan": plan,
-    }
+    return {"payment_id": payment.get("id"), "status": payment.get("status"), "confirmation_url": confirmation_url, "amount_rub": amount, "plan": plan}
 
 
 def get_payment(payment_id: str) -> dict[str, Any]:
@@ -123,31 +102,12 @@ def _activate_from_payment(payment: dict[str, Any]) -> dict[str, Any]:
     if not user_id or plan not in quota.PLANS or plan == "free" or not payment_id:
         raise YooKassaError("Платёж не содержит корректных данных тарифа.")
 
-    # Activate the subscription before claiming the payment in the idempotency
-    # ledger. If activation fails, the payment remains unclaimed and a later
-    # webhook retry can safely complete the activation. set_plan is an
-    # idempotent UPSERT, so duplicate webhook deliveries are safe here.
     period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
-    state = quota.set_plan(user_id, plan, "active", period_end)
+    activated, state = quota.activate_payment(payment_id, user_id, plan, period_end)
+    if not activated:
+        return {"ok": True, "activated": False, "duplicate": True, "payment_id": payment_id, "plan": state.get("plan"), "usage": state}
 
-    if hasattr(quota, "claim_payment") and not quota.claim_payment(payment_id, user_id, plan):
-        return {
-            "ok": True,
-            "activated": False,
-            "duplicate": True,
-            "payment_id": payment_id,
-            "plan": state.get("plan"),
-            "usage": state,
-        }
-
-    return {
-        "ok": True,
-        "activated": True,
-        "user_id": user_id,
-        "payment_id": payment_id,
-        "plan": plan,
-        "usage": state,
-    }
+    return {"ok": True, "activated": True, "user_id": user_id, "payment_id": payment_id, "plan": plan, "usage": state}
 
 
 def handle_webhook(event: dict[str, Any]) -> dict[str, Any]:
@@ -158,6 +118,4 @@ def handle_webhook(event: dict[str, Any]) -> dict[str, Any]:
     payment_id = str((event.get("object") or {}).get("id") or "").strip()
     if not payment_id:
         raise YooKassaError("Webhook не содержит payment id.")
-    # Never trust the webhook payload as the source of payment state; fetch the
-    # authoritative payment object from YooKassa before changing subscription state.
     return _activate_from_payment(get_payment(payment_id))
