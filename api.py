@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from api_secure import app
 import billing_yookassa
 import chat_api
+import mcp_server
 import quota
 import web_auth
 import yandex_public
@@ -19,6 +20,7 @@ import security
 
 chat_api.register(app)
 yandex_public.register_yandex_chart(app)
+app.include_router(mcp_server.router)
 SESSION_COOKIE = "sona_session"
 
 
