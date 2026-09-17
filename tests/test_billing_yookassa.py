@@ -59,13 +59,24 @@ def test_duplicate_webhook_does_not_refresh_subscription(monkeypatch, tmp_path):
     monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
 
     first = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": payment["id"]}})
-    first_period_end = first["usage"]["period_end"]
+    conn = sqlite3.connect(quota.SQLITE_PATH)
+    try:
+        before = conn.execute("SELECT period_end,updated_at FROM subscriptions WHERE user_id=?", ("user-duplicate",)).fetchone()
+    finally:
+        conn.close()
+
     duplicate = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": payment["id"]}})
+    conn = sqlite3.connect(quota.SQLITE_PATH)
+    try:
+        after = conn.execute("SELECT period_end,updated_at FROM subscriptions WHERE user_id=?", ("user-duplicate",)).fetchone()
+    finally:
+        conn.close()
 
     assert first["activated"] is True
     assert duplicate["activated"] is False
     assert duplicate["duplicate"] is True
-    assert duplicate["usage"]["period_end"] == first_period_end
+    assert after == before
+    assert duplicate["usage"]["period_end"] == first["usage"]["period_end"]
 
 
 def test_concurrent_duplicate_webhooks_only_activate_once(monkeypatch, tmp_path):
