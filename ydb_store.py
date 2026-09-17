@@ -89,6 +89,24 @@ class YDBStore:
                 except Exception:pass
                 raise
         return self._pool.retry_operation_sync(operation)
+    def activate_billing_payment(self,payment_id,user_id,plan,period_end,updated_at):
+        def operation(session):
+            tx=session.transaction().begin()
+            try:
+                existing=tx.execute(f"SELECT payment_id FROM `{self._table('billing_payments')}` WHERE payment_id=$payment_id;",{"$payment_id":payment_id})
+                with existing as rs:
+                    if rs and list(rs[0].rows):
+                        tx.rollback()
+                        return False
+                with tx.execute(f"INSERT INTO `{self._table('billing_payments')}` (payment_id,user_id,plan,claimed_at) VALUES ($payment_id,$user_id,$plan,$claimed_at);",{"$payment_id":payment_id,"$user_id":user_id,"$plan":plan,"$claimed_at":updated_at}):pass
+                with tx.execute(f"UPSERT INTO `{self._table('subscriptions')}` (user_id,plan,status,period_end,updated_at) VALUES ($user_id,$plan,$status,$period_end,$updated_at);",{"$user_id":user_id,"$plan":plan,"$status":"active","$period_end":period_end,"$updated_at":updated_at}):pass
+                tx.commit()
+                return True
+            except Exception:
+                try:tx.rollback()
+                except Exception:pass
+                raise
+        return self._pool.retry_operation_sync(operation)
     def claim_billing_payment(self,payment_id,user_id,plan):
         def operation(session):
             tx=session.transaction().begin()
