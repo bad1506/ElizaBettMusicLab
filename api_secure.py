@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
@@ -18,6 +20,7 @@ import master_engine
 import melody_alignment
 import production_engine
 import project_manager
+import quota
 import security
 import song_director
 import songwriter_editor
@@ -46,6 +49,21 @@ AUDIO_EXTS = {".wav", ".mp3", ".flac", ".m4a", ".ogg"}
 
 def storage() -> dict[str, Path]:
     return security.user_storage(BASE)
+
+
+def _quota(feature: str, units: int = 1) -> None:
+    user_id = security.current_user_id()
+    allowed, state = quota.check(user_id, feature, units)
+    if not allowed:
+        item = state["features"][feature]
+        raise HTTPException(402, f"Лимит {feature} исчерпан: {item['used']}/{item['limit']}. Выберите тариф с большим лимитом.")
+
+
+def _consume(feature: str, units: int = 1) -> None:
+    try:
+        quota.consume(security.current_user_id(), feature, units)
+    except quota.QuotaExceeded as exc:
+        raise HTTPException(402, f"Лимит {feature} исчерпан: {exc.item['used']}/{exc.item['limit']}.") from exc
 
 
 def find_latest_audio() -> Path | None:
@@ -117,13 +135,15 @@ async def _save_audio(file: UploadFile, folder: Path, default_name: str) -> Path
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
+    _quota("analysis")
     path = await _save_audio(file, storage()["input"], "track.wav")
     try:
         analysis = master_engine.analyze_file(path)
     except Exception:
         path.unlink(missing_ok=True)
         raise HTTPException(400, "Не удалось обработать аудиофайл")
-    return {"ok": True, "file": path.name, "analysis": analysis}
+    _consume("analysis")
+    return {"ok": True, "file": path.name, "analysis": analysis, "quota": quota.usage(security.current_user_id())["features"]["analysis"]}
 
 
 @app.get("/analysis")
@@ -201,27 +221,35 @@ class SongwriterAnalyzeRequest(BaseModel):
 
 @app.post("/songwriter/analyze")
 def songwriter_analyze(request: SongwriterAnalyzeRequest):
-    return {"ok": True, "analysis": songwriter_editor.analyze(request.text)}
+    _quota("songwriter")
+    result = songwriter_editor.analyze(request.text)
+    _consume("songwriter")
+    return {"ok": True, "analysis": result, "quota": quota.usage(security.current_user_id())["features"]["songwriter"]}
 
 
 @app.post("/songwriter")
 def songwriter(request: SongwriterRequest):
+    _quota("songwriter")
     try:
         context = dict(request.context or {})
         context["sona_skill"] = skill_context(str(context.get("skill") or "songwriter"))
         answer = songwriting_agent.generate(request.request, request.mode, context, request.trend_context)
     except Exception:
         raise HTTPException(502, "Songwriter service failed")
-    return {"ok": True, "agent": "SØNA SONGWRITER", "version": songwriting_agent.AGENT_VERSION, "mode": request.mode, "answer": answer}
+    _consume("songwriter")
+    return {"ok": True, "agent": "SØNA SONGWRITER", "version": songwriting_agent.AGENT_VERSION, "mode": request.mode, "answer": answer, "quota": quota.usage(security.current_user_id())["features"]["songwriter"]}
 
 
 @app.post("/songwriter/trends")
 def songwriter_trends(request: TrendRequest):
+    _quota("trends")
     try:
         focus = request.focus + "\n\nSØNA TRENDS SKILL:\n" + skill_context("trends")
-        return songwriting_agent.trend_report(focus)
+        result = songwriting_agent.trend_report(focus)
     except Exception:
         raise HTTPException(502, "Trend service failed")
+    _consume("trends")
+    return {"ok": True, "report": result, "quota": quota.usage(security.current_user_id())["features"]["trends"]}
 
 
 class SongDirectorRequest(BaseModel):
@@ -232,13 +260,16 @@ class SongDirectorRequest(BaseModel):
 
 @app.post("/songwriter/direct")
 def songwriter_direct(request: SongDirectorRequest):
+    _quota("songwriter")
     context = dict(request.context or {}); path = find_latest_audio()
     if path is not None:
         try:
             context["audio_to_song"] = audio_to_song.analyze(path); bpm = (context["audio_to_song"].get("tempo") or {}).get("bpm"); context["melody_map"] = melody_alignment.analyze(path, bpm=bpm)
         except Exception: context["audio_to_song_error"] = "analysis_failed"
-    try: return song_director.direct(request.request, context, request.trend_context)
+    try: result = song_director.direct(request.request, context, request.trend_context)
     except Exception: raise HTTPException(502, "Song director service failed")
+    _consume("songwriter")
+    return {**result, "quota": quota.usage(security.current_user_id())["features"]["songwriter"]}
 
 
 @app.get("/songwriter/memory")
@@ -277,11 +308,13 @@ def vocal():
 
 @app.post("/reference")
 async def reference(file: UploadFile = File(...)):
+    _quota("analysis")
     path = await _save_audio(file, storage()["reference"], "reference.wav")
     try: analysis = master_engine.analyze_file(path)
     except Exception:
         path.unlink(missing_ok=True); raise HTTPException(400, "Не удалось обработать референс")
-    return {"ok": True, "file": path.name, "analysis": analysis}
+    _consume("analysis")
+    return {"ok": True, "file": path.name, "analysis": analysis, "quota": quota.usage(security.current_user_id())["features"]["analysis"]}
 
 
 class MasterRequest(BaseModel):
@@ -293,11 +326,14 @@ class MasterRequest(BaseModel):
 
 @app.post("/master")
 def master(request: MasterRequest):
+    _quota("mastering")
     dirs = storage(); path = find_latest_audio()
     if path is None: raise HTTPException(400, "Сначала загрузите аудиофайл")
     reference = _latest(dirs["reference"], lambda p: p.suffix.lower() in AUDIO_EXTS)
-    try: return master_engine.run(path, dirs["output"], request.target_lufs, request.ceiling_db, request.intensity, reference=reference, profile=request.profile)
+    try: result = master_engine.run(path, dirs["output"], request.target_lufs, request.ceiling_db, request.intensity, reference=reference, profile=request.profile)
     except Exception: raise HTTPException(500, "Mastering failed")
+    _consume("mastering")
+    return {**result, "quota": quota.usage(security.current_user_id())["features"]["mastering"]}
 
 
 @app.get("/master/latest")
@@ -323,11 +359,13 @@ class ProductionRequest(BaseModel):
 
 @app.post("/production/run")
 def production_run(request: ProductionRequest):
+    _quota("production")
     dirs = storage()
     try: result = production_engine.run(dirs["input"], dirs["output"], request.request, request.profile, request.target_lufs)
     except Exception: raise HTTPException(500, "Production engine failed")
     if not result.get("ok"): raise HTTPException(400, "Production request could not be completed")
-    return result
+    _consume("production")
+    return {**result, "quota": quota.usage(security.current_user_id())["features"]["production"]}
 
 
 @app.get("/production/latest")
@@ -360,6 +398,7 @@ def project_export(request: ProjectRequest):
 
 @app.post("/stems")
 def stems():
+    _quota("stems")
     dirs = storage(); path = find_latest_audio()
     if path is None: raise HTTPException(400, "Сначала загрузите аудиофайл")
     device = os.getenv("DEMUCS_DEVICE", "cuda")
@@ -370,7 +409,8 @@ def stems():
     if result.returncode != 0: raise HTTPException(500, "Stem separation failed")
     stem_root = dirs["separated"] / "htdemucs" / path.stem
     stems = {name: f"/files/separated/{stem_root.relative_to(dirs['separated']).as_posix()}" for name in ("vocals.wav", "drums.wav", "bass.wav", "other.wav") if (stem_root/name).exists()}
-    return {"ok": True, "stems": stems}
+    _consume("stems")
+    return {"ok": True, "stems": stems, "quota": quota.usage(security.current_user_id())["features"]["stems"]}
 
 
 @app.get("/files/{kind}/{relative_path:path}")
