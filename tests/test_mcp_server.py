@@ -24,13 +24,20 @@ def test_mcp_initialize():
     assert body["result"]["capabilities"]["tools"]["listChanged"] is False
 
 
-def test_mcp_tools_list_exposes_allowlisted_tools():
+def test_mcp_initialized_notification_returns_202_without_body():
+    response = _call({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+    assert response.status_code == 202
+    assert response.body == b""
+
+
+def test_mcp_tools_list_exposes_allowlisted_tools_and_schemas():
     response = _call({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     assert response.status_code == 200
     body = json.loads(response.body)
-    names = {tool["name"] for tool in body["result"]["tools"]}
-    assert "music.get_current_analysis" in names
-    assert "music.get_current_intelligence_report" in names
+    tools = {tool["name"]: tool for tool in body["result"]["tools"]}
+    assert "music.get_current_analysis" in tools
+    assert "music.get_current_intelligence_report" in tools
+    assert tools["music.get_current_analysis"]["inputSchema"]["type"] == "object"
 
 
 def test_mcp_unknown_method_returns_jsonrpc_error():
