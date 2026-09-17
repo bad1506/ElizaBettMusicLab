@@ -4,6 +4,7 @@ import base64
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
@@ -80,9 +81,14 @@ def create_checkout(user_id: str, plan: str, return_url: str | None = None) -> d
     payment = _request("POST", "/payments", json=payload, _header_args={"idempotency_key": str(uuid.uuid4())})
     confirmation = payment.get("confirmation") or {}
     confirmation_url = confirmation.get("confirmation_url")
-    if not confirmation_url:
-        raise YooKassaError("Не удалось получить ссылку на оплату.")
-    return {"payment_id": payment.get("id"), "status": payment.get("status"), "confirmation_url": confirmation_url, "amount_rub": amount, "plan": plan}
+    payment_id = str(payment.get("id") or "").strip()
+    if not confirmation_url or not payment_id:
+        raise YooKassaError("Не удалось получить корректный платёж от ЮKassa.")
+    try:
+        quota.record_pending_payment(payment_id, user_id, plan, str(payment.get("status") or "pending"))
+    except Exception as exc:
+        raise YooKassaError("Платёж создан, но не удалось сохранить его в журнале. Повторите запрос позже.") from exc
+    return {"payment_id": payment_id, "status": payment.get("status"), "confirmation_url": confirmation_url, "amount_rub": amount, "plan": plan}
 
 
 def get_payment(payment_id: str) -> dict[str, Any]:
@@ -108,6 +114,56 @@ def _activate_from_payment(payment: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "activated": False, "duplicate": True, "payment_id": payment_id, "plan": state.get("plan"), "usage": state}
 
     return {"ok": True, "activated": True, "user_id": user_id, "payment_id": payment_id, "plan": plan, "usage": state}
+
+
+def _validate_pending_payment(payment: dict[str, Any], pending: dict[str, Any]) -> None:
+    metadata = payment.get("metadata") or {}
+    if str(metadata.get("user_id") or "").strip() != str(pending["user_id"]):
+        raise YooKassaError("Платёж не совпадает с пользователем из журнала.")
+    if str(metadata.get("plan") or "").strip() != str(pending["plan"]):
+        raise YooKassaError("Платёж не совпадает с тарифом из журнала.")
+    amount = payment.get("amount") or {}
+    try:
+        actual = Decimal(str(amount.get("value")))
+    except (InvalidOperation, TypeError):
+        raise YooKassaError("Платёж содержит некорректную сумму.")
+    expected = Decimal(str(prices()[pending["plan"]]))
+    if amount.get("currency") != "RUB" or actual != expected:
+        raise YooKassaError("Сумма или валюта платежа не совпадает с тарифом.")
+
+
+def reconcile_pending(limit: int = 50) -> dict[str, Any]:
+    if not enabled():
+        raise YooKassaError("ЮKassa не настроена.")
+    pending = quota.pending_payments(limit)
+    summary = {"checked": 0, "activated": 0, "duplicates": 0, "canceled": 0, "waiting": 0, "errors": 0, "items": []}
+    for row in pending:
+        summary["checked"] += 1
+        payment_id = row["payment_id"]
+        try:
+            payment = get_payment(payment_id)
+            status = str(payment.get("status") or "pending")
+            if status == "succeeded":
+                _validate_pending_payment(payment, row)
+                result = _activate_from_payment(payment)
+                if result.get("duplicate"):
+                    summary["duplicates"] += 1
+                elif result.get("activated"):
+                    summary["activated"] += 1
+                summary["items"].append({"payment_id": payment_id, "status": "succeeded", "result": "duplicate" if result.get("duplicate") else "activated"})
+            elif status == "canceled":
+                quota.mark_pending_payment(payment_id, "canceled")
+                summary["canceled"] += 1
+                summary["items"].append({"payment_id": payment_id, "status": status})
+            else:
+                quota.mark_pending_payment(payment_id, status if status in {"pending", "waiting_for_capture"} else "pending")
+                summary["waiting"] += 1
+                summary["items"].append({"payment_id": payment_id, "status": status})
+        except YooKassaError as exc:
+            quota.mark_pending_payment(payment_id, "error")
+            summary["errors"] += 1
+            summary["items"].append({"payment_id": payment_id, "status": "error", "error": str(exc)})
+    return summary
 
 
 def handle_webhook(event: dict[str, Any]) -> dict[str, Any]:
