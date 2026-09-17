@@ -39,6 +39,7 @@ def _connect() -> sqlite3.Connection:
     conn.execute("CREATE TABLE IF NOT EXISTS subscriptions (user_id TEXT PRIMARY KEY, plan TEXT NOT NULL, status TEXT NOT NULL, period_end TEXT, updated_at TEXT NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS usage_monthly (user_id TEXT NOT NULL, month TEXT NOT NULL, feature TEXT NOT NULL, used INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, month, feature))")
     conn.execute("CREATE TABLE IF NOT EXISTS billing_payments (payment_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, plan TEXT NOT NULL, claimed_at TEXT NOT NULL)")
+    conn.execute("CREATE TABLE IF NOT EXISTS billing_pending (payment_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, plan TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
     conn.commit()
     return conn
 
@@ -151,6 +152,48 @@ def set_plan(user_id: str, plan: str, status: str = "active", period_end: str | 
     return usage(user_id)
 
 
+def record_pending_payment(payment_id: str, user_id: str, plan: str, status: str = "pending") -> None:
+    if not payment_id or plan not in PLANS or plan == "free":
+        raise ValueError("Invalid pending payment")
+    now = datetime.now(timezone.utc).isoformat()
+    if DB_PROVIDER == "ydb":
+        _ydb().record_pending_payment(payment_id, user_id, plan, status, now)
+        return
+    with _LOCK:
+        conn = _connect()
+        try:
+            conn.execute("INSERT INTO billing_pending(payment_id,user_id,plan,status,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(payment_id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at", (payment_id, user_id, plan, status, now, now))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def pending_payments(limit: int = 100) -> list[dict]:
+    limit = max(1, min(int(limit), 100))
+    if DB_PROVIDER == "ydb":
+        return _ydb().pending_payments(limit)
+    conn = _connect()
+    try:
+        rows = conn.execute("SELECT payment_id,user_id,plan,status,created_at,updated_at FROM billing_pending WHERE status IN ('pending','waiting_for_capture') ORDER BY created_at ASC LIMIT ?", (limit,)).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
+
+
+def mark_pending_payment(payment_id: str, status: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    if DB_PROVIDER == "ydb":
+        _ydb().mark_pending_payment(payment_id, status, now)
+        return
+    with _LOCK:
+        conn = _connect()
+        try:
+            conn.execute("UPDATE billing_pending SET status=?,updated_at=? WHERE payment_id=?", (status, now, payment_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+
 def activate_payment(payment_id: str, user_id: str, plan: str, period_end: str) -> tuple[bool, dict]:
     """Atomically claim a succeeded payment and activate its subscription."""
     if not payment_id or plan not in PLANS or plan == "free":
@@ -168,6 +211,7 @@ def activate_payment(payment_id: str, user_id: str, plan: str, period_end: str) 
                 conn.rollback()
                 return False, usage(user_id)
             conn.execute("INSERT INTO subscriptions(user_id,plan,status,period_end,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,status=excluded.status,period_end=excluded.period_end,updated_at=excluded.updated_at", (user_id, plan, "active", period_end, now))
+            conn.execute("UPDATE billing_pending SET status='succeeded',updated_at=? WHERE payment_id=?", (datetime.now(timezone.utc).isoformat(), payment_id))
             conn.commit()
         except Exception:
             conn.rollback()
