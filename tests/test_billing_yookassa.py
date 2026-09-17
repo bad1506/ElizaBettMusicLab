@@ -1,4 +1,8 @@
+import concurrent.futures
+import sqlite3
+
 import billing_yookassa
+import quota
 
 
 def test_billing_disabled_without_credentials(monkeypatch):
@@ -28,54 +32,61 @@ def test_create_checkout_uses_idempotency_and_metadata(monkeypatch):
 def test_webhook_reverifies_successful_payment(monkeypatch):
     monkeypatch.setenv("YUKASSA_SHOP_ID", "shop")
     monkeypatch.setenv("YUKASSA_SECRET_KEY", "secret")
-    called = {}
 
     payment = {"id": "payment-2", "status": "succeeded", "metadata": {"user_id": "user-2", "plan": "creator"}}
+    called = {}
 
     def fake_get_payment(payment_id):
         called["id"] = payment_id
         return payment
 
     monkeypatch.setattr(billing_yookassa, "get_payment", fake_get_payment)
-    monkeypatch.setattr(billing_yookassa.quota, "claim_payment", lambda payment_id, user_id, plan: True)
-    monkeypatch.setattr(billing_yookassa.quota, "set_plan", lambda user_id, plan, status, period_end: {"plan": plan, "status": status, "period_end": period_end})
+    monkeypatch.setattr(billing_yookassa.quota, "activate_payment", lambda payment_id, user_id, plan, period_end: (True, {"plan": plan, "status": "active", "period_end": period_end}))
     result = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": "payment-2"}})
     assert called["id"] == "payment-2"
     assert result["activated"] is True
     assert result["plan"] == "creator"
 
 
-def test_webhook_retry_can_activate_after_transient_set_plan_failure(monkeypatch):
-    monkeypatch.setenv("YUKASSA_SHOP_ID", "shop")
-    monkeypatch.setenv("YUKASSA_SECRET_KEY", "secret")
+def _use_temp_sqlite(monkeypatch, tmp_path):
+    monkeypatch.setattr(quota, "DB_PROVIDER", "sqlite")
+    monkeypatch.setattr(quota, "SQLITE_PATH", tmp_path / "billing.sqlite3")
 
-    payment = {"id": "payment-retry", "status": "succeeded", "metadata": {"user_id": "user-retry", "plan": "pro"}}
+
+def test_duplicate_webhook_does_not_refresh_subscription(monkeypatch, tmp_path):
+    _use_temp_sqlite(monkeypatch, tmp_path)
+    payment = {"id": "payment-duplicate", "status": "succeeded", "metadata": {"user_id": "user-duplicate", "plan": "pro"}}
     monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
 
-    calls = {"set_plan": 0, "claim": 0}
+    first = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": payment["id"]}})
+    first_period_end = first["usage"]["period_end"]
+    duplicate = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": payment["id"]}})
 
-    def flaky_set_plan(user_id, plan, status, period_end):
-        calls["set_plan"] += 1
-        if calls["set_plan"] == 1:
-            raise RuntimeError("temporary database failure")
-        return {"plan": plan, "status": status, "period_end": period_end}
+    assert first["activated"] is True
+    assert duplicate["activated"] is False
+    assert duplicate["duplicate"] is True
+    assert duplicate["usage"]["period_end"] == first_period_end
 
-    def claim(payment_id, user_id, plan):
-        calls["claim"] += 1
-        return True
 
-    monkeypatch.setattr(billing_yookassa.quota, "set_plan", flaky_set_plan)
-    monkeypatch.setattr(billing_yookassa.quota, "claim_payment", claim)
+def test_concurrent_duplicate_webhooks_only_activate_once(monkeypatch, tmp_path):
+    _use_temp_sqlite(monkeypatch, tmp_path)
+    payment = {"id": "payment-concurrent", "status": "succeeded", "metadata": {"user_id": "user-concurrent", "plan": "creator"}}
+    monkeypatch.setattr(billing_yookassa, "get_payment", lambda payment_id: payment)
 
+    event = {"type": "notification", "event": "payment.succeeded", "object": {"id": payment["id"]}}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(lambda _: billing_yookassa.handle_webhook(event), range(8)))
+
+    activated = [result for result in results if result.get("activated")]
+    duplicates = [result for result in results if result.get("duplicate")]
+    assert len(activated) == 1
+    assert len(duplicates) == 7
+
+    conn = sqlite3.connect(quota.SQLITE_PATH)
     try:
-        billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": "payment-retry"}})
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError("first activation attempt must fail")
-
-    result = billing_yookassa.handle_webhook({"type": "notification", "event": "payment.succeeded", "object": {"id": "payment-retry"}})
-    assert result["activated"] is True
-    assert result["plan"] == "pro"
-    assert calls["set_plan"] == 2
-    assert calls["claim"] == 1
+        payment_count = conn.execute("SELECT COUNT(*) FROM billing_payments WHERE payment_id=?", (payment["id"],)).fetchone()[0]
+        subscription_count = conn.execute("SELECT COUNT(*) FROM subscriptions WHERE user_id=?", ("user-concurrent",)).fetchone()[0]
+    finally:
+        conn.close()
+    assert payment_count == 1
+    assert subscription_count == 1
