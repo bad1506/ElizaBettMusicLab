@@ -14,15 +14,17 @@ type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
 const telegram = window.Telegram?.WebApp
 const initData = telegram?.initData?.trim() || ''
-const api = import.meta.env.VITE_API_URL || '/api'
+const api = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 if (telegram) { telegram.ready?.(); telegram.expand?.(); telegram.setHeaderColor?.('#f5f5f3'); telegram.setBackgroundColor?.('#f5f5f3') }
 const originalFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-  const path = (() => { try { return new URL(url, window.location.origin).pathname } catch { return url } })()
+  const originalUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  const isRelativeApi = originalUrl.startsWith('/api/') || originalUrl === '/api'
+  const rewrittenUrl = isRelativeApi && api !== '/api' ? `${api}${originalUrl.slice(4)}` : originalUrl
+  const path = (() => { try { return new URL(originalUrl, window.location.origin).pathname } catch { return originalUrl } })()
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
-  const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
+  const isApiRequest = isRelativeApi || originalUrl.startsWith(api)
   // Only genuinely public endpoints bypass account authentication. Feature APIs such as
   // songwriter/trends consume paid/free quotas and must carry the account token (or Telegram auth).
   const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/agents/skills'
@@ -30,7 +32,8 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
   }
-  return originalFetch(input, { ...init, headers })
+  const fetchInput: RequestInfo | URL = input instanceof Request && rewrittenUrl !== originalUrl ? new Request(rewrittenUrl, input) : rewrittenUrl
+  return originalFetch(fetchInput, { ...init, headers })
 }
 if (initData) {
   originalFetch(`${api}/auth/telegram`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init_data: initData }) }).then(async r => r.ok ? r.json() : null).then(data => { if (data?.authenticated && data?.user) { sessionStorage.setItem('sona_telegram_user', JSON.stringify(data.user)); window.dispatchEvent(new CustomEvent('sona:telegram-auth', { detail: data.user })) } }).catch(() => undefined)
