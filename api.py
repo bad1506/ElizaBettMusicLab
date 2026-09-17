@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 import os
+import secrets
 from fastapi import HTTPException, Request as FastAPIRequest, Response
 from pydantic import BaseModel, Field
 
@@ -64,6 +66,59 @@ def _finish(response: Response, data: dict) -> dict:
     if token: response.set_cookie(SESSION_COOKIE, token, max_age=60 * 60 * 24 * 30, httponly=True, secure=True, samesite="lax", path="/")
     return {"ok": True, **data}
 
+
+def _billing_admin_required(request: FastAPIRequest) -> None:
+    configured = os.getenv("SONA_BILLING_ADMIN_KEY", "").strip()
+    supplied = request.headers.get("X-Billing-Admin-Key", "").strip()
+    if not configured or not secrets.compare_digest(supplied, configured):
+        raise HTTPException(403, "Billing administration is not authorized")
+
+
+def _webhook_source_ip(request: FastAPIRequest) -> ipaddress._BaseAddress | None:
+    """Return the caller IP, optionally using proxy forwarding headers.
+
+    TRUST_PROXY_HEADERS must only be enabled when the service is behind a
+    trusted reverse proxy (such as the Render ingress). Otherwise clients can
+    spoof X-Forwarded-For and bypass an IP allowlist.
+    """
+    if os.getenv("YUKASSA_TRUST_PROXY_HEADERS", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        candidate = forwarded.split(",", 1)[0].strip() if forwarded else request.headers.get("X-Real-IP", "").strip()
+    else:
+        candidate = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(candidate)
+    except ValueError:
+        return None
+
+
+def _yookassa_ip_allowed(request: FastAPIRequest) -> bool:
+    """Apply an optional YooKassa source-IP allowlist.
+
+    The allowlist is deliberately opt-in because reverse-proxy topology varies.
+    When configured, every webhook must originate from one of the configured
+    IPs/CIDRs. Authenticity is still verified by re-fetching the payment from
+    YooKassa's API in billing_yookassa.handle_webhook().
+    """
+    raw = os.getenv("YUKASSA_WEBHOOK_IP_ALLOWLIST", "").strip()
+    if not raw:
+        return True
+    source = _webhook_source_ip(request)
+    if source is None:
+        return False
+    for item in raw.replace(";", ",").split(","):
+        value = item.strip()
+        if not value:
+            continue
+        try:
+            network = ipaddress.ip_network(value, strict=False)
+        except ValueError:
+            continue
+        if source in network:
+            return True
+    return False
+
+
 @app.post("/auth/register")
 def auth_register(request: AuthRequest, response: Response):
     try: return _finish(response, web_auth.register(request.name, request.email, request.password))
@@ -114,6 +169,8 @@ def billing_checkout(payload: CheckoutRequest):
 
 @app.post("/billing/yookassa/webhook")
 async def billing_yookassa_webhook(request: FastAPIRequest):
+    if not _yookassa_ip_allowed(request):
+        raise HTTPException(403, "Webhook source IP is not allowed")
     try:
         event = await request.json()
         return billing_yookassa.handle_webhook(event)
@@ -122,19 +179,14 @@ async def billing_yookassa_webhook(request: FastAPIRequest):
 
 @app.post("/billing/admin/reconcile")
 def billing_admin_reconcile(request: FastAPIRequest, payload: BillingReconcileRequest):
-    configured = os.getenv("SONA_BILLING_ADMIN_KEY", "").strip()
-    supplied = request.headers.get("X-Billing-Admin-Key", "").strip()
-    if not configured or supplied != configured:
-        raise HTTPException(403, "Billing administration is not authorized")
+    _billing_admin_required(request)
     try:
         return {"ok": True, "reconciliation": billing_yookassa.reconcile_pending(payload.limit)}
-    except billing_yookassa.YooKassaError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    except billing_yookassa.YooKassaError as exc: raise HTTPException(503, str(exc)) from exc
 
 @app.post("/billing/admin/activate")
 def billing_admin_activate(request: FastAPIRequest, payload: PlanActivationRequest):
-    configured = os.getenv("SONA_BILLING_ADMIN_KEY", "").strip(); supplied = request.headers.get("X-Billing-Admin-Key", "").strip()
-    if not configured or supplied != configured: raise HTTPException(403, "Billing administration is not authorized")
+    _billing_admin_required(request)
     try: state = quota.set_plan(payload.user_id, payload.plan, payload.status, payload.period_end)
     except ValueError as exc: raise HTTPException(400, str(exc)) from exc
     return {"ok": True, "usage": state}
