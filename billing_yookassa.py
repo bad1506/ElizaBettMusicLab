@@ -3,12 +3,12 @@ from __future__ import annotations
 import base64
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
 
+import billing_activation
 import quota
 
 API = "https://api.yookassa.ru/v3"
@@ -108,8 +108,7 @@ def _activate_from_payment(payment: dict[str, Any]) -> dict[str, Any]:
     if not user_id or plan not in quota.PLANS or plan == "free" or not payment_id:
         raise YooKassaError("Платёж не содержит корректных данных тарифа.")
 
-    period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
-    activated, state = quota.activate_payment(payment_id, user_id, plan, period_end)
+    activated, state = billing_activation.activate_payment(payment_id, user_id, plan)
     if not activated:
         return {"ok": True, "activated": False, "duplicate": True, "payment_id": payment_id, "plan": state.get("plan"), "usage": state}
 
