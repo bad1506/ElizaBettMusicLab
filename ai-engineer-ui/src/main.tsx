@@ -6,6 +6,7 @@ import './SonaSferoomChat.css'
 import './SonaCommercialFixes.css'
 import './sona-cursor-glow.css'
 import './SonaAbout.css'
+import './sona-header-fix.css'
 import SonaPublic from './SonaPublic.tsx'
 import SonaSferoomChat from './SonaSferoomChat.tsx'
 import BillingPage from './BillingPage.tsx'
@@ -26,8 +27,6 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = isRelativeApi || originalUrl.startsWith(api)
-  // Only genuinely public endpoints bypass account authentication. Feature APIs such as
-  // songwriter/trends consume paid/free quotas and must carry the account token (or Telegram auth).
   const isPublicRequest = endpointPath === '/auth/register' || endpointPath === '/auth/login' || endpointPath === '/auth/telegram' || endpointPath === '/public/yandex-chart' || endpointPath === '/health' || endpointPath === '/agents/skills'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
