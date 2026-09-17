@@ -1,4 +1,33 @@
-/* SØNA header: keep the assistant/Telegram actions visually separate from account access. */
+/* SØNA header: account access stays in the header and never overlaps the floating assistant. */
 .account-button {
-  display: none !important;
+  display: inline-flex !important;
+}
+
+@media (max-width: 760px) {
+  .header-actions {
+    gap: 8px;
+  }
+
+  .account-button {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0;
+  }
+
+  .account-button::before {
+    content: "◯";
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .sona-telegram {
+    max-width: 164px;
+  }
 }
