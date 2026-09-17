@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "feat/**"
   pull_request:
 
 permissions:
@@ -65,20 +67,57 @@ jobs:
           python - <<'PY'
           import ast
           from pathlib import Path
-          tree = ast.parse(Path("api_secure.py").read_text(encoding="utf-8"))
-          routes = []
-          for node in ast.walk(tree):
-              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                  for dec in node.decorator_list:
-                      if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr in {"get", "post", "put", "patch", "delete"} and dec.args:
-                          if isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
-                              routes.append((dec.func.attr.upper(), dec.args[0].value, node.name))
-          required = {("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"), ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"), ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/songwriter"), ("POST", "/songwriter/analyze"), ("POST", "/songwriter/direct"), ("GET", "/songwriter/memory"), ("POST", "/songwriter/memory"), ("POST", "/songwriter/dna/rebuild"), ("GET", "/songwriter/audio-context"), ("GET", "/songwriter/melody-map"), ("POST", "/production/run"), ("GET", "/production/latest"), ("GET", "/project"), ("POST", "/project/save"), ("POST", "/project/export")}
-          actual = {(method, path) for method, path, _ in routes}
-          missing = sorted(required - actual)
-          if missing:
-              raise SystemExit(f"Missing API routes: {missing}")
-          print(f"Validated {len(routes)} FastAPI route declarations; public SØNA chat is provided by /sona-chat")
+
+          def declared_routes(path):
+              tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+              routes = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                      for dec in node.decorator_list:
+                          if (isinstance(dec, ast.Call)
+                              and isinstance(dec.func, ast.Attribute)
+                              and dec.func.attr in {"get", "post", "put", "patch", "delete"}
+                              and dec.args
+                              and isinstance(dec.args[0], ast.Constant)
+                              and isinstance(dec.args[0].value, str)):
+                              routes.add((dec.func.attr.upper(), dec.args[0].value))
+              return routes
+
+          secure = declared_routes("api_secure.py")
+          chat = declared_routes("chat_api.py")
+          api = declared_routes("api.py")
+
+          required_secure = {
+              ("POST", "/upload"), ("GET", "/analysis"), ("GET", "/timeline"),
+              ("GET", "/intelligence"), ("POST", "/master"), ("POST", "/stems"),
+              ("POST", "/reference"), ("GET", "/vocal"), ("POST", "/songwriter"),
+              ("POST", "/songwriter/analyze"), ("POST", "/songwriter/direct"),
+              ("GET", "/songwriter/memory"), ("POST", "/songwriter/memory"),
+              ("POST", "/songwriter/dna/rebuild"), ("GET", "/songwriter/audio-context"),
+              ("GET", "/songwriter/melody-map"), ("POST", "/production/run"),
+              ("GET", "/production/latest"), ("GET", "/project"),
+              ("POST", "/project/save"), ("POST", "/project/export"),
+          }
+          required_chat = {("POST", "/sona-chat"), ("POST", "/agents/run"), ("GET", "/agents/skills")}
+          required_api = {
+              ("POST", "/auth/register"), ("POST", "/auth/login"), ("POST", "/auth/logout"),
+              ("GET", "/auth/me"), ("GET", "/auth/history"), ("POST", "/auth/history"),
+              ("GET", "/billing/plans"), ("GET", "/billing/usage"), ("POST", "/billing/checkout"),
+              ("POST", "/billing/yookassa/webhook"), ("POST", "/billing/admin/activate"),
+              ("GET", "/agents"), ("GET", "/agents/tools"), ("POST", "/agents/tools/invoke"),
+              ("POST", "/agents/invoke"),
+          }
+
+          checks = {
+              "api_secure.py": (secure, required_secure),
+              "chat_api.py": (chat, required_chat),
+              "api.py": (api, required_api),
+          }
+          for filename, (actual, required) in checks.items():
+              missing = sorted(required - actual)
+              if missing:
+                  raise SystemExit(f"Missing API routes in {filename}: {missing}")
+          print(f"Validated routes: secure={len(secure)}, chat={len(chat)}, api={len(api)}")
           PY
       - name: Validate billing contract
         run: |
