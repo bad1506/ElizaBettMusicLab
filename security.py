@@ -14,17 +14,14 @@ import web_auth
 from storage_backend import get_storage_backend
 
 CURRENT_USER: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
-_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart", "/agents/skills", "/billing/plans"}
+_PUBLIC_PATHS = {"/", "/health", "/auth/telegram", "/auth/register", "/auth/login", "/public/yandex-chart", "/agents/skills", "/billing/plans", "/billing/yookassa/webhook"}
 _MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "100")) * 1024 * 1024
 _RATE_LOCK = threading.Lock(); _RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
-
 def max_upload_bytes() -> int: return _MAX_UPLOAD_BYTES
-
 def current_user() -> dict[str, Any]: return CURRENT_USER.get() or {"id": "local", "first_name": "Local"}
 def current_user_id() -> str: return str(current_user().get("id") or "local")
 def is_local_request(request: Request) -> bool: return (request.client.host if request.client else "") in {"127.0.0.1", "::1", "localhost"}
-
 
 def _rate_limit(bucket: str, limit: int, window: int = 60) -> bool:
     now = time.monotonic()
@@ -33,7 +30,6 @@ def _rate_limit(bucket: str, limit: int, window: int = 60) -> bool:
         while q and now - q[0] > window: q.popleft()
         if len(q) >= limit: return False
         q.append(now); return True
-
 
 def _workspace_snapshot(root: Path) -> dict[str, tuple[int, int]]:
     snapshot: dict[str, tuple[int, int]] = {}
@@ -45,14 +41,12 @@ def _workspace_snapshot(root: Path) -> dict[str, tuple[int, int]]:
         except OSError: continue
     return snapshot
 
-
 def _persist_workspace(base: Path, root: Path, before: dict[str, tuple[int, int]]) -> None:
     backend = get_storage_backend(base); after = _workspace_snapshot(root)
     changed = [Path(path) for path, stamp in after.items() if before.get(path) != stamp]
     deleted = [Path(path) for path in before if path not in after]
     for path in changed: backend.sync_file(current_user_id(), path)
     if deleted: backend.delete_files(current_user_id(), deleted)
-
 
 def security_middleware(app):
     @app.middleware("http")
@@ -116,21 +110,14 @@ def security_middleware(app):
         return response
     return _security
 
-
 def user_storage(base: Path) -> dict[str, Path]:
     backend = get_storage_backend(base); user_id = current_user_id(); root = backend.user_root(user_id); backend.hydrate(user_id)
     dirs = {"root":root,"input":root/"mastering_input","output":root/"optimizer_output","separated":root/"separated","reference":root/"reference","project":root/"project_data"}
     for directory in dirs.values(): directory.mkdir(parents=True, exist_ok=True)
     return dirs
 
-
-def sync_user_file(base: Path, path: Path, *, key: str | None = None):
-    return get_storage_backend(base).sync_file(current_user_id(), path, key=key)
-
-
-def sync_user_tree(base: Path, root: Path, *, prefix: str | None = None):
-    return get_storage_backend(base).sync_tree(current_user_id(), root, prefix=prefix)
-
+def sync_user_file(base: Path, path: Path, *, key: str | None = None): return get_storage_backend(base).sync_file(current_user_id(), path, key=key)
+def sync_user_tree(base: Path, root: Path, *, prefix: str | None = None): return get_storage_backend(base).sync_tree(current_user_id(), root, prefix=prefix)
 
 def resolve_user_file(base: Path, kind: str, relative_path: str) -> Path | None:
     dirs = user_storage(base); key = {"input":"input","optimizer_output":"output","separated":"separated","reference":"reference","project_data":"project"}.get(kind)
