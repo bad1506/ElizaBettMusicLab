@@ -8,6 +8,7 @@ import './sona-cursor-glow.css'
 import './SonaAbout.css'
 import SonaPublic from './SonaPublic.tsx'
 import SonaSferoomChat from './SonaSferoomChat.tsx'
+import BillingPage from './BillingPage.tsx'
 
 type TelegramWebApp = { ready?: () => void; expand?: () => void; setHeaderColor?: (color: string) => void; setBackgroundColor?: (color: string) => void; initData?: string; initDataUnsafe?: { user?: { id?: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } } }
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
@@ -52,4 +53,8 @@ function CursorGlow() {
   }, [])
   return null
 }
-createRoot(document.getElementById('root')!).render(<StrictMode><><CursorGlow /><SonaPublic /><SonaSferoomChat /></></StrictMode>)
+function AppShell() {
+  const isPricing = window.location.pathname.replace(/\/+$/, '') === '/pricing'
+  return <><CursorGlow /><SonaPublic /><SonaSferoomChat />{isPricing && <BillingPage />}</>
+}
+createRoot(document.getElementById('root')!).render(<StrictMode><AppShell /></StrictMode>)
