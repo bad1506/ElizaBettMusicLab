@@ -8,6 +8,7 @@ pandas
 plotly
 openai
 boto3
+ydb
 
 fastapi
 uvicorn
