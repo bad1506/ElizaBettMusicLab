@@ -1,4 +1,5 @@
 /* Keep account access in the header instead of competing with SØNA Assistant. */
+/* v2: header position is intentional on mobile and desktop. */
 #sona-account-root {
   position: fixed !important;
   top: 18px !important;
