@@ -23,7 +23,9 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined))
   const token = localStorage.getItem('sona_token')?.trim() || ''
   const isApiRequest = url.startsWith(api) || url.startsWith('/api/')
-  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/songwriter' || path === '/api/songwriter/trends' || path === '/api/agents/skills'
+  // Only genuinely public endpoints bypass account authentication. Feature APIs such as
+  // songwriter/trends consume paid/free quotas and must carry the account token (or Telegram auth).
+  const isPublicRequest = path === '/api/auth/register' || path === '/api/auth/login' || path === '/api/auth/telegram' || path === '/api/public/yandex-chart' || path === '/api/health' || path === '/api/agents/skills'
   if (isApiRequest && !isPublicRequest) {
     if (token) headers.set('Authorization', `Bearer ${token}`)
     else if (initData) headers.set('X-Telegram-Init-Data', initData)
