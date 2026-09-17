@@ -1,0 +1,4 @@
+/* SØNA header: keep the assistant/Telegram actions visually separate from account access. */
+.account-button {
+  display: none !important;
+}
