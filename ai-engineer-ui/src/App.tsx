@@ -45,7 +45,8 @@ export default function App() {
   const [messages, setMessages] = useState<Record<ToolId, Message[]>>(() => initialMessages(lang));
   const [input, setInput] = useState(""); const [file, setFile] = useState<File | null>(null); const [busy, setBusy] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [account, setAccount] = useState<any>(null); const [history, setHistory] = useState<any[]>([]); const [plans, setPlans] = useState<any[]>([]); const [billing, setBilling] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null); const c = copy[lang];
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("sona_theme", theme); }, [theme]);\n  useEffect(() => { void loadAccount(); void loadPlans(); }, []);
+  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem("sona_theme", theme); }, [theme]);
+  useEffect(() => { void loadAccount(); void loadPlans(); }, []);
   async function loadAccount(){ try { const res=await fetch(`${API}/auth/me`,{credentials:"include"}); if(!res.ok)return; const data=await res.json(); setAccount(data.user); setHistory(data.history||[]); setBilling(data.billing||null); localStorage.setItem("sona_token","session"); } catch {} }
   async function loadPlans(){ try { const res=await fetch(`${API}/billing/plans`); if(res.ok){const data=await res.json(); setPlans(Object.entries(data.plans||{}).map(([id,value]:any)=>({id,...value,price_rub:value.price_rub??0})));} } catch {} }
   async function logout(){ try{await fetch(`${API}/auth/logout`,{method:"POST",credentials:"include"});}catch{} setAccount(null);setBilling(null);localStorage.removeItem("sona_token");go("home"); }
