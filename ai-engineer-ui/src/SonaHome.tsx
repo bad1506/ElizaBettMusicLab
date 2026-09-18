@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play, Volume2 } from "lucide-react";
 import "./SonaHome.css";
+import "./SonaPoehali.css";
 
 type Copy = { start: string; tools: readonly string[]; descriptions: readonly string[]; latest: string; all: string };
 
