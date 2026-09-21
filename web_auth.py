@@ -86,6 +86,19 @@ def create_session(user_id: str) -> dict:
     return {"token": token, "expires_at": expires, "user": dict(row)}
 
 
+def revoke_session(token: str) -> bool:
+    if not token:
+        return False
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    conn = _connect()
+    try:
+        cursor = conn.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
 def get_user(token: str) -> dict | None:
     if not token:
         return None
